@@ -138,6 +138,28 @@ def test_team_rearms_ars_after_co2_drops_below_threshold():
     assert any(cmd.kind == "air_revitalisation" for cmd in outcome_high.commands)
 
 
+def test_team_escalates_ars_on_critical_band():
+    cfg = _team_config()
+    cfg["policy"]["co2_storage_critical_kg"] = 2.2
+    team = SsosEclssLoopTeam(cfg)
+    backend = LoopMockEclssBackend(
+        {
+            "simulation": {"initial_co2_storage_kg": 2.5, "initial_o2_storage_kg": 0.5},
+            "mock_dynamics": {"ars_co2_reduction_kg": 0.1},
+        }
+    )
+    snap = backend.poll_telemetry()
+    obs = EclssLoopObservation(step=0, telemetry=snap, health={"overall": "critical"})
+    outcome = team.run_step(backend, obs)
+    assert any(c.kind == "air_revitalisation" for c in outcome.commands)
+    team.apply_outcome(backend, outcome)
+    assert team.state.ars_critical_escalated is True
+    assert team.state.ars_invoked is True
+    assert backend.last_ars_goal is not None
+    # Escalated mass = policy ars_goal (0.9) * 1.5
+    assert backend.last_ars_goal.initial_co2_mass == pytest.approx(1.35)
+
+
 def test_loop_mock_request_o2_withdraws_plant_storage():
     backend = LoopMockEclssBackend(
         {

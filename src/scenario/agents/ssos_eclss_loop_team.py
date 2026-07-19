@@ -46,6 +46,7 @@ _OGS_GOAL_FIELDS = frozenset({"input_water_mass", "iodine_concentration"})
 class EclssLoopTeamState:
     alert_sent: bool = False
     ars_invoked: bool = False
+    ars_critical_escalated: bool = False
     co2_requested: bool = False
     ogs_invoked: bool = False
     co2_at_ars_dispatch: Optional[float] = None
@@ -154,6 +155,7 @@ class SsosEclssLoopTeam(Team):
         agent_ids = self.team_cfg.agent_ids
         n = len(agent_ids)
         co2_high = float(self.policy.get("co2_storage_high_kg", 1.5))
+        co2_critical = float(self.policy.get("co2_storage_critical_kg", 2.2))
         o2_low = float(self.policy.get("o2_storage_low_kg", 0.45))
         co2 = obs.telemetry.co2_storage_kg
         o2 = obs.telemetry.o2_storage_kg
@@ -161,13 +163,15 @@ class SsosEclssLoopTeam(Team):
         if co2 is not None and co2 >= co2_high and not self.state.alert_sent:
             commenter = agent_ids[obs.step % n]
             self.state.alert_sent = True
+            band = "critical" if co2 >= co2_critical else "high"
             outcome.messages.append(
                 AgentMessage(
                     step=obs.step,
                     from_role=commenter,
                     to_role="team",
                     message=(
-                        f"CO2 storage {co2:.1f} kg exceeds high band {co2_high:.1f} kg."
+                        f"CO2 storage {co2:.1f} kg exceeds {band} band "
+                        f"({co2_critical:.1f} kg critical / {co2_high:.1f} kg high)."
                     ),
                     message_type="alert",
                     reasoning="Storage telemetry threshold crossed.",
@@ -175,7 +179,9 @@ class SsosEclssLoopTeam(Team):
                 )
             )
 
-        messages, commands = self._labeled_recovery(obs, rep, co2_high, o2_low, co2, o2)
+        messages, commands = self._labeled_recovery(
+            obs, rep, co2_high, co2_critical, o2_low, co2, o2
+        )
         outcome.messages.extend(messages)
         outcome.commands.extend(commands)
         return outcome
@@ -190,6 +196,7 @@ class SsosEclssLoopTeam(Team):
         """Re-arm one-shot flags when telemetry returns to the safe band."""
         if co2 is not None and co2 < co2_high:
             self.state.ars_invoked = False
+            self.state.ars_critical_escalated = False
             self.state.alert_sent = False
             self.state.co2_at_ars_dispatch = None
         elif (
@@ -217,6 +224,7 @@ class SsosEclssLoopTeam(Team):
         obs: EclssLoopObservation,
         rep: str,
         co2_high: float,
+        co2_critical: float,
         o2_low: float,
         co2: Optional[float],
         o2: Optional[float],
@@ -225,8 +233,17 @@ class SsosEclssLoopTeam(Team):
         messages: List[AgentMessage] = []
         commands: List[EclssOperationalCommand] = []
 
-        if co2 is not None and co2 >= co2_high and not self.state.ars_invoked:
+        in_critical = co2 is not None and co2 >= co2_critical
+        need_ars = co2 is not None and co2 >= co2_high and (
+            not self.state.ars_invoked
+            or (in_critical and not self.state.ars_critical_escalated)
+        )
+        if need_ars:
             ars_payload = dict(self.policy.get("ars_goal", {}))
+            if in_critical:
+                # Escalate processed mass when verification critical band is breached (T3).
+                base_mass = float(ars_payload.get("initial_co2_mass", 1.8))
+                ars_payload["initial_co2_mass"] = base_mass * 1.5
             commands.append(
                 EclssOperationalCommand(
                     kind="air_revitalisation",
@@ -236,14 +253,25 @@ class SsosEclssLoopTeam(Team):
             )
             self.state.ars_invoked = True
             self.state.co2_at_ars_dispatch = co2
+            if in_critical:
+                self.state.ars_critical_escalated = True
+            reason = (
+                f"CO2 storage {co2:.1f} kg >= critical {co2_critical:.1f} kg; escalated ARS."
+                if in_critical
+                else f"CO2 storage {co2:.1f} kg >= {co2_high:.1f} kg."
+            )
             messages.append(
                 AgentMessage(
                     step=obs.step,
                     from_role=rep,
                     to_role="team",
-                    message="Starting ARS air_revitalisation to vent CO2 from storage.",
+                    message=(
+                        "Starting escalated ARS air_revitalisation (critical band)."
+                        if in_critical
+                        else "Starting ARS air_revitalisation to vent CO2 from storage."
+                    ),
                     message_type="operational_command",
-                    reasoning=f"CO2 storage {co2:.1f} kg >= {co2_high:.1f} kg.",
+                    reasoning=reason,
                     metadata=self._rule_metadata(),
                 )
             )

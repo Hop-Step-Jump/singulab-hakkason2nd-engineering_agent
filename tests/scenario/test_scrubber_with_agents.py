@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from environment.scrubber.eclss_ops.telemetry import CO2_SAFE_PPM, CO2_WARNING_PPM
+from environment.scrubber.eclss_ops.telemetry import CO2_RECOVERY_PPM, CO2_SAFE_PPM, CO2_WARNING_PPM
 from environment.protocol import HealthMetrics, HealthStatus, TelemetrySnapshot
 from scenario.runner import run_scenario
 from scenario.agents.scrubber_degradation_team import ScrubberDegradationTeam
@@ -55,12 +55,16 @@ def test_scrubber_degradation_labeled_agents_recover(tmp_path: Path):
     assert summary["design_proposal_count"] >= 1
     assert any(c.get("change_kind") == "add_edge" for c in design_proposals.get("changes", []))
     assert summary["peak_co2_ppm"] > CO2_SAFE_PPM
-    assert summary["final_co2_ppm"] < CO2_WARNING_PPM, "agents should drive CO2 below warning band"
-    if summary["co2_above_threshold_step"] is not None:
-        assert summary["co2_recovered_below_threshold_step"] is not None
+    # T5: require the shared operational recovery band, not only health WARNING (1200).
+    assert summary["final_co2_ppm"] < CO2_RECOVERY_PPM, (
+        "agents should drive CO2 below CO2_RECOVERY_PPM"
+    )
+    assert summary["final_co2_ppm"] < CO2_WARNING_PPM
+    assert summary["co2_above_threshold_step"] is not None
+    assert summary["co2_recovered_below_threshold_step"] is not None
 
     final_step = telemetry[-1]
-    assert final_step["co2_ppm"] < CO2_WARNING_PPM
+    assert final_step["co2_ppm"] < CO2_RECOVERY_PPM
     assert "eps_support_w" in final_step
     assert "eps_support_steps_remaining" in final_step
     assert summary["provenance_record_count"] >= 1
@@ -268,15 +272,15 @@ def test_llm_design_parse_supports_add_node_and_unrestricted_parameter():
     assert param_change["payload"]["key"] == "custom_gain"
 
 
-def test_co2_recovery_summary_uses_warning_threshold():
-    """co2_recovered_below_threshold_step aligns with CO2_WARNING_PPM excursion."""
+def test_co2_recovery_summary_uses_recovery_threshold():
+    """co2_recovered_below_threshold_step aligns with CO2_RECOVERY_PPM excursion."""
     co2_above_threshold_step = None
     co2_recovered_below_threshold_step = None
 
-    for step, co2_ppm in enumerate([1100.0, 1250.0, 1300.0, 1150.0, 900.0], start=1):
-        if co2_ppm >= CO2_WARNING_PPM and co2_above_threshold_step is None:
+    for step, co2_ppm in enumerate([900.0, 1050.0, 1100.0, 980.0, 900.0], start=1):
+        if co2_ppm >= CO2_RECOVERY_PPM and co2_above_threshold_step is None:
             co2_above_threshold_step = step
-        if co2_ppm < CO2_WARNING_PPM and co2_above_threshold_step is not None:
+        if co2_ppm < CO2_RECOVERY_PPM and co2_above_threshold_step is not None:
             if co2_recovered_below_threshold_step is None:
                 co2_recovered_below_threshold_step = step
 

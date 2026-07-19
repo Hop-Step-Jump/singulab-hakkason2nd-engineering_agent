@@ -144,7 +144,7 @@ Phase 7a は **`Ros2EclssBridge` クライアント側 remap** のみ。SSOS ノ
 
 | 項目 | メモ |
 |------|------|
-| `co2_critical` 未使用（labeled） | health は critical を評価するが labeled ルールは `co2_high` のみ |
+| `co2_critical` 未使用（labeled） | ~~health は critical を評価するが labeled ルールは `co2_high` のみ~~ → **修正済（T3）**: critical 帯で ARS をエスカレート再発行 |
 | One Piece provenance ヒューリスティック | operational イベントの message パース依存 |
 | labeled が command failure を無視 | 次ステップのルール分岐に未反映 |
 | `set_parameter` 任意パス | 本番 SSOS では allowlist 推奨 |

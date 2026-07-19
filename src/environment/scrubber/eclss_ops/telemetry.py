@@ -1,10 +1,19 @@
-"""Telemetry formatting and health status derivation."""
+"""Telemetry formatting and health status derivation.
+
+CO₂ bands (single source of truth for scrubber_degradation)
+----------------------------------------------------------
+- ``CO2_SAFE_PPM`` (800): health SAFE if strictly below this
+- ``CO2_RECOVERY_PPM`` (1000): shared operational band for labeled agents,
+  summary recovery KPI, and dashboard reference line
+- ``CO2_WARNING_PPM`` (1200): health WARNING below this; CRITICAL at/above
+"""
 
 from __future__ import annotations
 
 from environment.protocol import HealthMetrics, HealthStatus, TelemetrySnapshot
 
 CO2_SAFE_PPM = 800.0
+CO2_RECOVERY_PPM = 1000.0
 CO2_WARNING_PPM = 1200.0
 POWER_LOW_W = 0.0
 POWER_CRITICAL_W = -150.0

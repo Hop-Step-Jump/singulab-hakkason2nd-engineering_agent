@@ -145,7 +145,7 @@ Phase 7a covers **client-side remap in `Ros2EclssBridge` only**. Without `--ros-
 
 | Item | Note |
 |------|------|
-| `co2_critical` unused (labeled) | health evaluates critical but labeled rules only use `co2_high` |
+| `co2_critical` unused (labeled) | ~~health evaluates critical but labeled rules only use `co2_high`~~ → **fixed (T3)**: escalate ARS when critical band is breached |
 | One Piece provenance heuristic | operational events depend on message parsing |
 | labeled ignores command failure | not reflected in next-step rule branching |
 | `set_parameter` arbitrary path | allowlist recommended for production SSOS |

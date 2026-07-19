@@ -16,6 +16,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from tools.dashboard import ssos_views
+from environment.scrubber.eclss_ops.telemetry import CO2_RECOVERY_PPM
 
 RESULTS_ROOT = Path(__file__).resolve().parents[2] / "experiments" / "results"
 
@@ -99,7 +100,7 @@ def _build_line_plot_figure(
     axes[0].grid(alpha=0.2)
 
     axes[1].plot(steps, co2, color="#1f77b4", linewidth=2)
-    axes[1].axhline(1000.0, color="#ff7f0e", linestyle="--", linewidth=1)
+    axes[1].axhline(CO2_RECOVERY_PPM, color="#ff7f0e", linestyle="--", linewidth=1)
     _maybe_highlight(axes[1])
     axes[1].set_ylabel("CO2 (ppm)")
     axes[1].set_title("CO2 trajectory")

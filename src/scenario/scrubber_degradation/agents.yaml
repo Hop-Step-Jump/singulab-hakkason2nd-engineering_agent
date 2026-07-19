@@ -20,11 +20,13 @@ team:
     Cite teammates by agent_id; agree or disagree explicitly.
 
 # policy: labeled_rule_base mode only — llm code paths must not read these values.
+# co2_recovery_ppm must match environment.scrubber.eclss_ops.telemetry.CO2_RECOVERY_PPM
 policy:
   co2_recovery_ppm: 1000
   fan_speed: 1.0
   enable_bypass: true
   reduce_load_on_power_critical: true
+  reduce_load_on_co2_high: true
   request_eps_boost_on_power_critical: true
   eps_boost_w: 120.0
   bypass_edge:

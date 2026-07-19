@@ -33,6 +33,7 @@ from environment.protocol import (
     RecoveryCommand,
     SimulatorProtocol,
 )
+from environment.scrubber.eclss_ops.telemetry import CO2_RECOVERY_PPM
 
 
 @dataclass
@@ -124,7 +125,7 @@ class ScrubberDegradationTeam(Team):
     def _run_step_labeled(self, obs: AgentObservation) -> StepAgentOutcome:
         outcome = StepAgentOutcome()
         rep = self.team_cfg.action_rep_id(obs.step)
-        recovery_ppm = float(self.policy.get("co2_recovery_ppm", 1000))
+        recovery_ppm = float(self.policy.get("co2_recovery_ppm", CO2_RECOVERY_PPM))
         agent_ids = self.team_cfg.agent_ids
         n = len(agent_ids)
 
@@ -213,6 +214,27 @@ class ScrubberDegradationTeam(Team):
                     message="Reducing cabin metabolic load to lower CO2 production.",
                     message_type="recovery_command",
                     reasoning="Power margin critical; load shedding.",
+                    metadata=self._rule_metadata(),
+                )
+            )
+
+        if (
+            self.policy.get("reduce_load_on_co2_high", True)
+            and obs.telemetry.co2_ppm >= recovery_ppm
+            and not self.state.load_reduced
+        ):
+            commands.append(
+                RecoveryCommand(kind=CommandKind.REDUCE_LOAD, value=True, issued_by=rep)
+            )
+            self.state.load_reduced = True
+            messages.append(
+                AgentMessage(
+                    step=obs.step,
+                    from_role=rep,
+                    to_role="team",
+                    message="Reducing cabin metabolic load to drive CO2 below recovery band.",
+                    message_type="recovery_command",
+                    reasoning=f"CO2 {obs.telemetry.co2_ppm:.0f} ppm >= {recovery_ppm:.0f}; load shedding.",
                     metadata=self._rule_metadata(),
                 )
             )
@@ -475,7 +497,7 @@ class ScrubberDegradationTeam(Team):
         baseline: Dict[str, Any],
         rep: str,
     ) -> Dict[str, Any]:
-        co2_threshold = float(self.policy.get("co2_recovery_ppm", 1000))
+        co2_threshold = float(self.policy.get("co2_recovery_ppm", CO2_RECOVERY_PPM))
         peak = float(summary.get("peak_co2_ppm", 0))
         anomaly_seen = bool(summary.get("anomaly_seen"))
         if peak < co2_threshold and not anomaly_seen:
