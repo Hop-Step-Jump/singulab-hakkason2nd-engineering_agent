@@ -13,11 +13,15 @@ from environment.ssos.eclss.types import (
     WrsGoal,
 )
 from environment.ssos.eclss.mock.backend import MockEclssBackend
-from environment.ssos.eclss.units import o2_generated_kg, water_kg_to_l
 
 
 class LoopMockEclssBackend(MockEclssBackend):
-    """MockEclssBackend extension that evolves CO2/O2 storage across poll cycles."""
+    """MockEclssBackend extension that evolves CO2/O2 storage across poll cycles.
+
+    Storage (``_co2`` / ``_o2`` / ``_water``) is the single source of truth for
+    ``poll_telemetry``. Parent ``_telemetry`` is kept in sync so inherited
+    helpers do not drift (D2).
+    """
 
     def __init__(self, config: Dict[str, Any]) -> None:
         super().__init__()
@@ -28,11 +32,19 @@ class LoopMockEclssBackend(MockEclssBackend):
         self._water = float(sim_cfg.get("initial_product_water_l", 100.0))
         self._co2_growth = float(mock_cfg.get("co2_growth_kg_per_step", 0.06))
         self._ars_reduction = float(mock_cfg.get("ars_co2_reduction_kg", 0.35))
-        # Fallback only when OGS details omit stoichiometry (should not happen for mock).
-        self._ogs_o2_gain_fallback = float(mock_cfg.get("ogs_o2_gain_kg", 0.1))
+        # Reference mass for scaling ARS reduction with goal.initial_co2_mass (D1).
+        self._ars_reference_kg = float(mock_cfg.get("ars_reference_co2_mass_kg", 1.8))
+        self._sabatier_co2_per_water = float(mock_cfg.get("sabatier_co2_kg_per_water_kg", 2.0))
+        self._sync_parent_telemetry()
+
+    def _sync_parent_telemetry(self) -> None:
+        self._telemetry.co2_storage_kg = self._co2
+        self._telemetry.o2_storage_kg = self._o2
+        self._telemetry.product_water_reserve_l = self._water
 
     def advance_step(self) -> None:
         self._co2 += self._co2_growth
+        self._sync_parent_telemetry()
 
     def poll_telemetry(self) -> EclssTelemetrySnapshot:
         return EclssTelemetrySnapshot(
@@ -46,34 +58,87 @@ class LoopMockEclssBackend(MockEclssBackend):
 
     def send_air_revitalisation_goal(self, goal: ArsGoal) -> ActionResult:
         result = super().send_air_revitalisation_goal(goal)
-        self._co2 = max(0.0, self._co2 - self._ars_reduction)
-        return result
+        if not result.success:
+            return result
+        # D1: scale fixed mock reduction by goal mass vs reference (design proposals matter).
+        reference = self._ars_reference_kg
+        goal_mass = max(0.0, float(goal.initial_co2_mass))
+        scale = (goal_mass / reference) if reference > 0.0 else 0.0
+        reduction = min(self._co2, self._ars_reduction * scale)
+        self._co2 = max(0.0, self._co2 - reduction)
+        self._sync_parent_telemetry()
+        return ActionResult(
+            success=True,
+            summary_message=result.summary_message,
+            details={
+                "co2_reduced_kg": reduction,
+                "initial_co2_mass": goal_mass,
+                "ars_scale": scale,
+            },
+        )
 
     def send_oxygen_generation_goal(self, goal: OgsGoal) -> ActionResult:
+        # D2: parent water draw uses the same reserve LoopMock publishes.
+        self._sync_parent_telemetry()
         result = super().send_oxygen_generation_goal(goal)
-        water_kg = float(goal.input_water_mass)
-        o2_gain = float(result.details.get("total_o2_generated", o2_generated_kg(water_kg)))
-        if o2_gain <= 0.0:
-            o2_gain = self._ogs_o2_gain_fallback
-        self._o2 += o2_gain
-        # Keep LoopMock public water in sync with parent mass→liter draw (U2/U4).
-        self._water = max(0.0, self._water - water_kg_to_l(water_kg))
-        # Sabatier side-effect scales with water processed (replaces fixed 30 kg).
-        sabatier_co2 = min(self._co2, water_kg * 2.0)
+        if not result.success:
+            return result
+        # Inherit single water subtract from parent; do not subtract again.
+        self._water = float(self._telemetry.product_water_reserve_l or 0.0)
+        # Prefer parent mock O₂ yield (stoichiometric via o2_generated_kg) over a separate gain.
+        o2_gain = float(result.details.get("total_o2_generated", 0.0))
+        self._o2 += max(0.0, o2_gain)
+        water_kg = max(0.0, float(goal.input_water_mass))
+        sabatier_co2 = min(self._co2, water_kg * self._sabatier_co2_per_water)
         self._co2 = max(0.0, self._co2 - sabatier_co2)
-        return result
+        self._sync_parent_telemetry()
+        details = dict(result.details)
+        details["sabatier_co2_consumed_kg"] = sabatier_co2
+        return ActionResult(
+            success=True,
+            summary_message=result.summary_message,
+            details=details,
+        )
 
     def request_co2(self, amount: float) -> ServiceResult:
+        """Withdraw CO2 from plant storage for Sabatier feedstock (D3)."""
         result = super().request_co2(amount)
-        self._co2 += amount
-        return result
+        if not result.success:
+            return result
+        granted = min(self._co2, float(amount))
+        if granted <= 0.0:
+            return ServiceResult(
+                success=False,
+                response_value=0.0,
+                message="insufficient CO2 in storage",
+            )
+        self._co2 = max(0.0, self._co2 - granted)
+        self._sync_parent_telemetry()
+        return ServiceResult(
+            success=True,
+            response_value=granted,
+            message="mock co2 delivered",
+        )
 
     def request_o2(self, amount: float) -> ServiceResult:
         """Withdraw O2 from plant storage (/o2_storage) when the service succeeds."""
         result = super().request_o2(amount)
-        if result.success:
-            self._o2 = max(0.0, self._o2 - min(self._o2, amount))
-        return result
+        if not result.success:
+            return result
+        granted = min(self._o2, float(amount))
+        if granted <= 0.0:
+            return ServiceResult(
+                success=False,
+                response_value=0.0,
+                message="insufficient O2 in storage",
+            )
+        self._o2 = max(0.0, self._o2 - granted)
+        self._sync_parent_telemetry()
+        return ServiceResult(
+            success=True,
+            response_value=granted,
+            message="mock o2 delivered",
+        )
 
     def send_water_recovery_goal(self, goal: WrsGoal) -> ActionResult:
         raise NotImplementedError("WRS actions are Phase 2")

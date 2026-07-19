@@ -20,7 +20,9 @@ backend:
 mock_dynamics:
   co2_growth_kg_per_step: 0.06
   ars_co2_reduction_kg: 0.35
-  ogs_o2_gain_kg: 0.1
+  # Scales ARS reduction with ArsGoal.initial_co2_mass / this reference (D1).
+  ars_reference_co2_mass_kg: 1.8
+  sabatier_co2_kg_per_water_kg: 2.0
 
 thresholds:
   co2_storage_high_kg: 1.5

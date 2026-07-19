@@ -45,6 +45,28 @@ def test_mock_set_subsystem_failure():
     assert snap.ars_failure_enabled is True
 
 
+def test_mock_ars_failure_blocks_success():
+    backend = MockEclssBackend()
+    backend.set_subsystem_failure("ars", True)
+    result = backend.send_air_revitalisation_goal(ArsGoal())
+    assert result.success is False
+
+
+def test_mock_ogs_rejects_negative_water_mass():
+    backend = MockEclssBackend()
+    before = backend.poll_telemetry().product_water_reserve_l
+    result = backend.send_oxygen_generation_goal(OgsGoal(input_water_mass=-1.0))
+    assert result.success is False
+    assert backend.poll_telemetry().product_water_reserve_l == before
+
+
+def test_mock_request_o2_rejects_negative():
+    backend = MockEclssBackend()
+    result = backend.request_o2(-10.0)
+    assert result.success is False
+    assert result.response_value == 0.0
+
+
 def test_mock_wrs_water_tradeoffs():
     backend = MockEclssBackend()
     before = backend.poll_telemetry()

@@ -7,8 +7,8 @@ import pytest
 from core.agents.base import Team
 from scenario.agents.eclss_loop_types import EclssLoopObservation
 from scenario.agents.ssos_eclss_loop_team import SsosEclssLoopTeam
+from environment.ssos.eclss.types import ArsGoal, OgsGoal, EclssTelemetrySnapshot
 from scenario.ssos_eclss_loop.loop_mock_backend import LoopMockEclssBackend
-from environment.ssos.eclss.types import EclssTelemetrySnapshot
 
 
 def _team_config():
@@ -22,8 +22,8 @@ def _team_config():
             "o2_storage_low_kg": 0.45,
             "request_co2_before_ogs": True,
             "request_co2_amount": 0.01,
-            "ars_goal": {"initial_co2_mass": 0.9},
-            "ogs_goal": {"input_water_mass": 0.005},
+            "ars_goal": {"initial_co2_mass": 1.8},
+            "ogs_goal": {"input_water_mass": 0.015},
         },
     }
 
@@ -147,6 +147,81 @@ def test_loop_mock_request_o2_withdraws_plant_storage():
     )
     backend.request_o2(0.025)
     assert backend.poll_telemetry().o2_storage_kg == pytest.approx(0.075)
+
+
+def test_loop_mock_ars_scales_with_goal_mass():
+    cfg = {
+        "simulation": {"initial_co2_storage_kg": 2.0, "initial_o2_storage_kg": 0.5},
+        "mock_dynamics": {"ars_co2_reduction_kg": 0.35, "ars_reference_co2_mass_kg": 1.8},
+    }
+    low = LoopMockEclssBackend(cfg)
+    high = LoopMockEclssBackend(cfg)
+    low.send_air_revitalisation_goal(ArsGoal(initial_co2_mass=0.9))
+    high.send_air_revitalisation_goal(ArsGoal(initial_co2_mass=1.8))
+    # Half reference → half reduction (0.175); full reference → 0.35
+    assert low.poll_telemetry().co2_storage_kg == pytest.approx(2.0 - 0.175)
+    assert high.poll_telemetry().co2_storage_kg == pytest.approx(2.0 - 0.35)
+
+
+def test_loop_mock_water_tracks_ogs_without_double_subtract():
+    backend = LoopMockEclssBackend(
+        {
+            "simulation": {"initial_product_water_l": 50.0, "initial_o2_storage_kg": 0.4},
+            "mock_dynamics": {},
+        }
+    )
+    before = backend.poll_telemetry().product_water_reserve_l
+    backend.send_oxygen_generation_goal(OgsGoal(input_water_mass=5.0))
+    after = backend.poll_telemetry()
+    assert after.product_water_reserve_l == pytest.approx(before - 5.0)
+    assert backend._telemetry.product_water_reserve_l == pytest.approx(after.product_water_reserve_l)
+
+
+def test_loop_mock_request_co2_withdraws_storage():
+    backend = LoopMockEclssBackend(
+        {
+            "simulation": {"initial_co2_storage_kg": 1.0},
+            "mock_dynamics": {},
+        }
+    )
+    result = backend.request_co2(0.25)
+    assert result.success
+    assert result.response_value == pytest.approx(0.25)
+    assert backend.poll_telemetry().co2_storage_kg == pytest.approx(0.75)
+
+
+def test_loop_mock_failure_blocks_ars_physics():
+    backend = LoopMockEclssBackend(
+        {
+            "simulation": {"initial_co2_storage_kg": 2.0},
+            "mock_dynamics": {"ars_co2_reduction_kg": 0.5},
+        }
+    )
+    backend.set_subsystem_failure("ars", True)
+    before = backend.poll_telemetry().co2_storage_kg
+    result = backend.send_air_revitalisation_goal(ArsGoal(initial_co2_mass=1.8))
+    assert result.success is False
+    assert backend.poll_telemetry().co2_storage_kg == before
+
+
+def test_loop_mock_rejects_negative_request_o2():
+    backend = LoopMockEclssBackend(
+        {"simulation": {"initial_o2_storage_kg": 0.5}, "mock_dynamics": {}}
+    )
+    before = backend.poll_telemetry().o2_storage_kg
+    result = backend.request_o2(-0.1)
+    assert result.success is False
+    assert backend.poll_telemetry().o2_storage_kg == before
+
+
+def test_llm_operational_parse_rejects_negative_amount():
+    team = SsosEclssLoopTeam({"mode": "llm", "team": {"count": 1, "id_prefix": "op"}, "llm": {}})
+    cmd, note = team._parse_llm_operational_command(
+        {"kind": "request_o2", "payload": {"amount": -5.0}},
+        issued_by="op_1",
+    )
+    assert cmd is None
+    assert note is not None
 
 
 def test_llm_operational_parse_air_revitalisation_and_request_co2():

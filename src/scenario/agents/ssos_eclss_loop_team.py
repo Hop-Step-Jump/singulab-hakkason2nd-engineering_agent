@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -569,6 +570,8 @@ class SsosEclssLoopTeam(Team):
                 amount = float(payload.get("amount"))
             except (TypeError, ValueError):
                 return None, f"{kind} payload.amount must be numeric"
+            if not math.isfinite(amount) or amount <= 0.0:
+                return None, f"{kind} payload.amount must be finite and positive"
             return (
                 EclssOperationalCommand(kind=kind, payload={"amount": amount}, issued_by=issued_by),
                 None,
@@ -588,9 +591,13 @@ class SsosEclssLoopTeam(Team):
             if key not in allowed:
                 continue
             try:
-                normalized[key] = float(value)
+                number = float(value)
             except (TypeError, ValueError):
                 return None
+            # D5: reject NaN/Inf/negative quantities from LLM payloads.
+            if not math.isfinite(number) or number < 0.0:
+                return None
+            normalized[key] = number
         return normalized or None
 
     def _llm_skip(
