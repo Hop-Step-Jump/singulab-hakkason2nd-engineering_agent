@@ -152,8 +152,8 @@ class SsosEclssLoopTeam(Team):
         rep = self.team_cfg.action_rep_id(obs.step)
         agent_ids = self.team_cfg.agent_ids
         n = len(agent_ids)
-        co2_high = float(self.policy.get("co2_storage_high_kg", 1500.0))
-        o2_low = float(self.policy.get("o2_storage_low_kg", 450.0))
+        co2_high = float(self.policy.get("co2_storage_high_kg", 1.5))
+        o2_low = float(self.policy.get("o2_storage_low_kg", 0.45))
         co2 = obs.telemetry.co2_storage_kg
         o2 = obs.telemetry.o2_storage_kg
 
@@ -249,7 +249,7 @@ class SsosEclssLoopTeam(Team):
 
         if o2 is not None and o2 <= o2_low and not self.state.ogs_invoked:
             if self.policy.get("request_co2_before_ogs", True) and not self.state.co2_requested:
-                amount = float(self.policy.get("request_co2_amount", 25.0))
+                amount = float(self.policy.get("request_co2_amount", 0.025))
                 commands.append(
                     EclssOperationalCommand(
                         kind="request_co2",
@@ -676,8 +676,10 @@ class SsosEclssLoopTeam(Team):
 
 _ECLSS_OPERATIONAL_LEVERS = """\
 ### Operational levers (facility reference)
-- air_revitalisation: ARS action — payload fields initial_co2_mass, initial_moisture_content, initial_contaminants (kg / % as plant expects).
-- oxygen_generation: OGS action — payload fields input_water_mass, iodine_concentration.
+- air_revitalisation: ARS action — payload fields initial_co2_mass (kg),
+  initial_moisture_content (percent 0–100), initial_contaminants (percent 0–100).
+- oxygen_generation: OGS action — payload fields input_water_mass (kg),
+  iodine_concentration (mg/L). O₂ yield ≈ 0.89 kg per kg water × efficiency.
 - request_co2: Service call — payload {"amount": <kg>} Sabatier feedstock before OGS when needed.
 - request_o2: Service call — payload {"amount": <kg>} withdraw O2 from plant /o2_storage reserve.
 Actions are asynchronous; issue only commands justified by Telemetry and team discourse."""

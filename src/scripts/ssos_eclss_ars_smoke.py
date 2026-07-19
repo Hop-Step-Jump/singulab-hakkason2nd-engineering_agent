@@ -27,6 +27,7 @@ import time
 from pathlib import Path
 from typing import List, Optional, Sequence, Tuple
 
+from environment.ssos.eclss.units import mass_g_to_kg, mass_kg_to_g
 from environment.ssos.eclss.ros2.topics import (
     ACTION_AIR_REVITALISATION,
     ACTION_TYPE_AIR_REVITALISATION,
@@ -160,9 +161,12 @@ def _match_expected(topics: List[str], actions: List[str]) -> List[str]:
 
 
 def send_ars_goal_cli(goal: ArsGoal, timeout_s: float = 120.0) -> Tuple[Optional[ArsActionResult], Optional[str]]:
-    """Send air_revitalisation goal via ros2 CLI (works in SSOS container without extra pip deps)."""
+    """Send air_revitalisation goal via ros2 CLI (works in SSOS container without extra pip deps).
+
+    ``ArsGoal.initial_co2_mass`` is kilograms; SSOS action fields are grams.
+    """
     goal_yaml = (
-        f"{{initial_co2_mass: {goal.initial_co2_mass}, "
+        f"{{initial_co2_mass: {mass_kg_to_g(goal.initial_co2_mass)}, "
         f"initial_moisture_content: {goal.initial_moisture_content}, "
         f"initial_contaminants: {goal.initial_contaminants}}}"
     )
@@ -207,7 +211,7 @@ def send_ars_goal_cli(goal: ArsGoal, timeout_s: float = 120.0) -> Tuple[Optional
             success=success,
             cycles_completed=cycles or 0,
             total_vents=vents or 0,
-            total_co2_vented=co2_vented or 0.0,
+            total_co2_vented=mass_g_to_kg(co2_vented) if co2_vented is not None else 0.0,
             summary_message=summary or "",
         ),
         None,
@@ -288,7 +292,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="SSOS ECLSS ARS Phase 1a smoke test")
     parser.add_argument("--json-out", type=Path, help="Write JSON report to this path")
     parser.add_argument("--no-goal", action="store_true", help="Only list topics/actions")
-    parser.add_argument("--co2-mass", type=float, default=1800.0)
+    parser.add_argument("--co2-mass", type=float, default=1.8,
+                        help="ARS initial_co2_mass in kilograms (converted to grams for SSOS)")
     parser.add_argument("--moisture", type=float, default=25.0)
     parser.add_argument("--contaminants", type=float, default=5.0)
     parser.add_argument("--goal-timeout", type=float, default=120.0)

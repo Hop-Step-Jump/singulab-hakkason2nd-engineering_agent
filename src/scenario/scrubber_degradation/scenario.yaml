@@ -18,6 +18,7 @@ design_parameters:
   permanent_bypass_power_w: 20.0
   load_reduction_factor: 0.6
   base_power_draw_w: 200.0
+  power_draw_to_margin_factor: 0.01875
 
 anomalies:
   - name: scrubber_degradation

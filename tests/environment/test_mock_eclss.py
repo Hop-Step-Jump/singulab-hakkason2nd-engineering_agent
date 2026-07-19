@@ -72,6 +72,14 @@ def test_design_dict_change_adds_bypass_edge():
     assert any(e.kind == "bypass" for e in state.topology.edges)
 
 
+def test_power_draw_uses_unified_margin_factor():
+    sim = MockEclssSimulator(initial_power_margin_w=150.0)
+    before = sim.power_margin_w
+    sim.step()
+    # default: (200 + 80*0.7) * 0.01875 = 4.8
+    assert before - sim.power_margin_w == pytest.approx(4.8)
+
+
 def test_health_metrics_critical_on_high_co2():
     sim = MockEclssSimulator(initial_co2_ppm=2500.0)
     snap = sim.step()

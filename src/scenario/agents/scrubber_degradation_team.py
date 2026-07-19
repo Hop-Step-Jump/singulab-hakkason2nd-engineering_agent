@@ -697,7 +697,9 @@ _SCRUBBER_RECOVERY_LEVERS = """\
 - reduce_load: true/false. Cuts cabin metabolic CO2 production to ~60% of normal while active.
 - request_eps_boost: value is support_watts (W). Arms BCDU battery discharge for 5 steps at that wattage;
   applied support appears in eps_support_w / eps_support_steps_remaining.
-- Plant baseline bus draw ~200 W. power_margin_w is net generation budget minus loads (negative = shortfall).
+- Plant baseline bus draw ~200 W and fan ~80 W (nameplate). Each step converts
+  total load watts to power_margin_w via power_draw_to_margin_factor (single scale).
+- power_margin_w is the running margin after that conversion (negative = shortfall).
 - Size EPS support to the shortfall you observe in power_margin_w; token wattages barely move this plant."""
 
 

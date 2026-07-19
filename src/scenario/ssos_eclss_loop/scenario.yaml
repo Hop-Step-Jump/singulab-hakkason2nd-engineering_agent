@@ -2,11 +2,12 @@ name: ssos_eclss_loop
 description: >
   SSOS ECLSS closed loop. Agents operate ARS/OGS via EclssBackend (Crew Simulation
   replacement). Mock backend for local dev; Ros2EclssBridge for SSOS Docker.
+  Mass storage values are kilograms (ROS bridge converts SSOS grams ↔ kg).
 
 simulation:
   steps: 8
-  initial_co2_storage_kg: 1500.0
-  initial_o2_storage_kg: 480.0
+  initial_co2_storage_kg: 1.5
+  initial_o2_storage_kg: 0.48
   initial_product_water_l: 100.0
 
 backend:
@@ -17,14 +18,14 @@ backend:
     startup_wait_s: 45.0
 
 mock_dynamics:
-  co2_growth_kg_per_step: 60.0
-  ars_co2_reduction_kg: 350.0
-  ogs_o2_gain_kg: 100.0
+  co2_growth_kg_per_step: 0.06
+  ars_co2_reduction_kg: 0.35
+  ogs_o2_gain_kg: 0.1
 
 thresholds:
-  co2_storage_high_kg: 1500.0
-  co2_storage_critical_kg: 2200.0
-  o2_storage_low_kg: 450.0
+  co2_storage_high_kg: 1.5
+  co2_storage_critical_kg: 2.2
+  o2_storage_low_kg: 0.45
   product_water_low_l: 50.0
 
 agents:

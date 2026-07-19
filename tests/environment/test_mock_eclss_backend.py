@@ -5,6 +5,7 @@ import pytest
 from environment.ssos.eclss.backend import EclssBackend
 from environment.ssos.eclss.types import ArsGoal, OgsGoal, WrsGoal
 from environment.ssos.eclss.mock.backend import MockEclssBackend
+from environment.ssos.eclss.units import o2_generated_kg
 
 
 def test_mock_backend_satisfies_protocol():
@@ -14,27 +15,27 @@ def test_mock_backend_satisfies_protocol():
 
 def test_mock_poll_telemetry_returns_defaults():
     snap = MockEclssBackend().poll_telemetry()
-    assert snap.co2_storage_kg == 1800.0
-    assert snap.o2_storage_kg == 500.0
+    assert snap.co2_storage_kg == 1.8
+    assert snap.o2_storage_kg == 0.5
     assert snap.product_water_reserve_l == 100.0
 
 
 def test_mock_ars_and_ogs_goals():
     backend = MockEclssBackend()
-    ars = backend.send_air_revitalisation_goal(ArsGoal(initial_co2_mass=900.0))
-    ogs = backend.send_oxygen_generation_goal(OgsGoal(input_water_mass=10.0))
+    ars = backend.send_air_revitalisation_goal(ArsGoal(initial_co2_mass=0.9))
+    ogs = backend.send_oxygen_generation_goal(OgsGoal(input_water_mass=0.01))
     assert ars.success
     assert ogs.success
-    assert backend.last_ars_goal.initial_co2_mass == 900.0
-    assert backend.last_ogs_goal.input_water_mass == 10.0
+    assert backend.last_ars_goal.initial_co2_mass == 0.9
+    assert backend.last_ogs_goal.input_water_mass == 0.01
 
 
 def test_mock_o2_and_co2_services():
     backend = MockEclssBackend()
-    o2 = backend.request_o2(250.0)
-    co2 = backend.request_co2(100.0)
-    assert o2.success and o2.response_value == 250.0
-    assert co2.success and co2.response_value == 100.0
+    o2 = backend.request_o2(0.25)
+    co2 = backend.request_co2(0.1)
+    assert o2.success and o2.response_value == 0.25
+    assert co2.success and co2.response_value == 0.1
 
 
 def test_mock_set_subsystem_failure():
@@ -65,10 +66,12 @@ def test_mock_wrs_water_tradeoffs():
     after_drink = backend.poll_telemetry()
     assert after_drink.product_water_reserve_l == after_recovery.product_water_reserve_l - 10.0
 
-    ogs = backend.send_oxygen_generation_goal(OgsGoal(input_water_mass=5.0))
+    water_kg = 5.0
+    ogs = backend.send_oxygen_generation_goal(OgsGoal(input_water_mass=water_kg))
     assert ogs.success
+    assert ogs.details["total_o2_generated"] == pytest.approx(o2_generated_kg(water_kg))
     after_ogs = backend.poll_telemetry()
-    assert after_ogs.product_water_reserve_l == after_drink.product_water_reserve_l - 5.0
+    assert after_ogs.product_water_reserve_l == after_drink.product_water_reserve_l - water_kg
 
 
 def test_mock_request_product_water_insufficient_reserve():

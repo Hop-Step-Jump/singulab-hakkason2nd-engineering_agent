@@ -43,8 +43,8 @@ def test_poll_telemetry_parses_jazzy_repr_float_topics(monkeypatch):
 
     monkeypatch.setattr("environment.ssos.ros2.cli.subprocess.run", fake_run)
     snap = Ros2EclssBridge().poll_telemetry()
-    assert snap.co2_storage_kg == 1234.5
-    assert snap.o2_storage_kg == 678.0
+    assert snap.co2_storage_kg == pytest.approx(1.2345)
+    assert snap.o2_storage_kg == pytest.approx(0.678)
     assert snap.product_water_reserve_l == 42.0
 
 
@@ -82,8 +82,8 @@ def test_poll_telemetry_parses_float_topics(monkeypatch):
 
     monkeypatch.setattr("environment.ssos.ros2.cli.subprocess.run", fake_run)
     snap = Ros2EclssBridge().poll_telemetry()
-    assert snap.co2_storage_kg == 1234.5
-    assert snap.o2_storage_kg == 678.0
+    assert snap.co2_storage_kg == pytest.approx(1.2345)
+    assert snap.o2_storage_kg == pytest.approx(0.678)
     assert snap.product_water_reserve_l == 42.0
 
 
@@ -133,8 +133,8 @@ def test_parallel_cli_poll_runs_echoes_concurrently(monkeypatch):
     monkeypatch.setattr("environment.ssos.ros2.cli.subprocess.run", fake_run)
     snap = Ros2EclssBridge().poll_telemetry()
     assert peak >= 2
-    assert snap.co2_storage_kg == 1.0
-    assert snap.o2_storage_kg == 2.0
+    assert snap.co2_storage_kg == pytest.approx(0.001)
+    assert snap.o2_storage_kg == pytest.approx(0.002)
     assert snap.product_water_reserve_l == 3.0
 
 
@@ -152,14 +152,17 @@ def test_poll_uses_rclpy_reader_when_available(monkeypatch):
         lambda: _FakeReader(),
     )
     snap = Ros2EclssBridge(topic_timeout_s=7.5, telemetry_max_age_s=15.0).poll_telemetry()
-    assert snap.co2_storage_kg == 10.0
-    assert snap.o2_storage_kg == 20.0
+    assert snap.co2_storage_kg == pytest.approx(0.01)
+    assert snap.o2_storage_kg == pytest.approx(0.02)
     assert snap.product_water_reserve_l == 30.0
 
 
 def test_request_o2_parses_service_response(monkeypatch):
+    captured = {}
+
     def fake_run(args, **_kwargs):
         assert args[0:2] == ["ros2", "service"]
+        captured["args"] = list(args)
         return subprocess.CompletedProcess(
             args,
             0,
@@ -168,14 +171,18 @@ def test_request_o2_parses_service_response(monkeypatch):
         )
 
     monkeypatch.setattr("environment.ssos.ros2.cli.subprocess.run", fake_run)
-    result = Ros2EclssBridge().request_o2(500.0)
+    result = Ros2EclssBridge().request_o2(0.5)
+    assert "o2_req: 500.0" in captured["args"][-1]
     assert result.success
-    assert result.response_value == 500.0
+    assert result.response_value == pytest.approx(0.5)
     assert result.message == "ok"
 
 
 def test_request_co2_parses_service_response(monkeypatch):
+    captured = {}
+
     def fake_run(args, **_kwargs):
+        captured["args"] = list(args)
         return subprocess.CompletedProcess(
             args,
             0,
@@ -184,9 +191,10 @@ def test_request_co2_parses_service_response(monkeypatch):
         )
 
     monkeypatch.setattr("environment.ssos.ros2.cli.subprocess.run", fake_run)
-    result = Ros2EclssBridge().request_co2(120.0)
+    result = Ros2EclssBridge().request_co2(0.12)
+    assert "co2_req: 120.0" in captured["args"][-1]
     assert result.success
-    assert result.response_value == 120.0
+    assert result.response_value == pytest.approx(0.12)
 
 
 def test_request_co2_parses_jazzy_repr_service_response(monkeypatch):
@@ -203,9 +211,9 @@ def test_request_co2_parses_jazzy_repr_service_response(monkeypatch):
         )
 
     monkeypatch.setattr("environment.ssos.ros2.cli.subprocess.run", fake_run)
-    result = Ros2EclssBridge().request_co2(50.0)
+    result = Ros2EclssBridge().request_co2(0.05)
     assert result.success
-    assert result.response_value == 50.0
+    assert result.response_value == pytest.approx(0.05)
     assert result.message == "CO2 successfully delivered"
 
 
@@ -223,7 +231,7 @@ def test_request_o2_parses_jazzy_repr_insufficient_storage(monkeypatch):
         )
 
     monkeypatch.setattr("environment.ssos.ros2.cli.subprocess.run", fake_run)
-    result = Ros2EclssBridge().request_o2(100.0)
+    result = Ros2EclssBridge().request_o2(0.1)
     assert result.success is False
     assert result.response_value == 0.0
     assert "Insufficient" in result.message
@@ -241,11 +249,15 @@ def test_poll_telemetry_includes_failure_flags_after_set(monkeypatch):
     snap = bridge.poll_telemetry()
     assert snap.ogs_failure_enabled is True
     assert snap.ars_failure_enabled is False
+    assert snap.co2_storage_kg == pytest.approx(0.1)
 
 
 def test_send_oxygen_generation_goal_parses_action_result(monkeypatch):
+    captured = {}
+
     def fake_run(args, **_kwargs):
         assert "/oxygen_generation" in args
+        captured["args"] = list(args)
         return subprocess.CompletedProcess(
             args,
             0,
@@ -257,9 +269,10 @@ def test_send_oxygen_generation_goal_parses_action_result(monkeypatch):
         )
 
     monkeypatch.setattr("environment.ssos.ros2.cli.subprocess.run", fake_run)
-    result = Ros2EclssBridge().send_oxygen_generation_goal(OgsGoal())
+    result = Ros2EclssBridge().send_oxygen_generation_goal(OgsGoal(input_water_mass=0.015))
+    assert "input_water_mass: 15.0" in captured["args"][-1]
     assert result.success
-    assert result.details.get("total_o2_generated") == 88.0
+    assert result.details.get("total_o2_generated") == pytest.approx(0.088)
 
 
 def test_set_subsystem_failure_publishes_bool(monkeypatch):

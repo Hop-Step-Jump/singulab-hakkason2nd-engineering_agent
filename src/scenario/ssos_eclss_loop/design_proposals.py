@@ -237,7 +237,7 @@ def build_design_proposals_from_run(
                 "change_kind": "service_config",
                 "payload": {
                     "service": "request_co2",
-                    "amount": float(policy.get("request_co2_amount", 25.0)),
+                    "amount": float(policy.get("request_co2_amount", 0.025)),
                     "before_ogs": bool(policy.get("request_co2_before_ogs", True)),
                 },
             }

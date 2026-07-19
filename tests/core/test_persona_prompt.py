@@ -79,7 +79,7 @@ def test_llm_situation_has_telemetry_and_world_state_without_policy():
     assert "### World state" in situation
     assert "### Recovery levers" in situation
     assert "request_eps_boost: value is support_watts" in situation
-    assert "power_margin_w is net generation budget" in situation
+    assert "power_margin_w is the running margin" in situation
     assert "co2_status=warning" in situation
     assert "Rule thresholds" not in situation
     assert "co2_recovery_ppm" not in situation

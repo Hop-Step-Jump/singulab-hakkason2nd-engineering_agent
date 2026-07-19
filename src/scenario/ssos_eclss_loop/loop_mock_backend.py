@@ -13,6 +13,7 @@ from environment.ssos.eclss.types import (
     WrsGoal,
 )
 from environment.ssos.eclss.mock.backend import MockEclssBackend
+from environment.ssos.eclss.units import o2_generated_kg, water_mass_kg_to_liters
 
 
 class LoopMockEclssBackend(MockEclssBackend):
@@ -22,12 +23,13 @@ class LoopMockEclssBackend(MockEclssBackend):
         super().__init__()
         sim_cfg = config.get("simulation", {})
         mock_cfg = config.get("mock_dynamics", {})
-        self._co2 = float(sim_cfg.get("initial_co2_storage_kg", 1650.0))
-        self._o2 = float(sim_cfg.get("initial_o2_storage_kg", 480.0))
+        self._co2 = float(sim_cfg.get("initial_co2_storage_kg", 1.65))
+        self._o2 = float(sim_cfg.get("initial_o2_storage_kg", 0.48))
         self._water = float(sim_cfg.get("initial_product_water_l", 100.0))
-        self._co2_growth = float(mock_cfg.get("co2_growth_kg_per_step", 60.0))
-        self._ars_reduction = float(mock_cfg.get("ars_co2_reduction_kg", 350.0))
-        self._ogs_o2_gain = float(mock_cfg.get("ogs_o2_gain_kg", 100.0))
+        self._co2_growth = float(mock_cfg.get("co2_growth_kg_per_step", 0.06))
+        self._ars_reduction = float(mock_cfg.get("ars_co2_reduction_kg", 0.35))
+        # Fallback only when OGS details omit stoichiometry (should not happen for mock).
+        self._ogs_o2_gain_fallback = float(mock_cfg.get("ogs_o2_gain_kg", 0.1))
 
     def advance_step(self) -> None:
         self._co2 += self._co2_growth
@@ -49,8 +51,16 @@ class LoopMockEclssBackend(MockEclssBackend):
 
     def send_oxygen_generation_goal(self, goal: OgsGoal) -> ActionResult:
         result = super().send_oxygen_generation_goal(goal)
-        self._o2 += self._ogs_o2_gain
-        self._co2 = max(0.0, self._co2 - min(self._co2, 30.0))
+        water_kg = float(goal.input_water_mass)
+        o2_gain = float(result.details.get("total_o2_generated", o2_generated_kg(water_kg)))
+        if o2_gain <= 0.0:
+            o2_gain = self._ogs_o2_gain_fallback
+        self._o2 += o2_gain
+        # Keep LoopMock public water in sync with parent mass→liter draw (U2/U4).
+        self._water = max(0.0, self._water - water_mass_kg_to_liters(water_kg))
+        # Sabatier side-effect scales with water processed (replaces fixed 30 kg).
+        sabatier_co2 = min(self._co2, water_kg * 2.0)
+        self._co2 = max(0.0, self._co2 - sabatier_co2)
         return result
 
     def request_co2(self, amount: float) -> ServiceResult:

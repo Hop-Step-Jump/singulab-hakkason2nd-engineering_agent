@@ -84,7 +84,12 @@ class MockEclssSimulator:
                 if self.design.has_bypass_edge()
                 else params["bypass_power_w"]
             )
-        self.power_margin_w -= params["base_power_draw_w"] * 0.01 + fan_power * 0.05 + bypass_power * 0.05
+        # Facility loads are nameplate watts; convert with one factor so base/fan/bypass
+        # share the same unit path. Anomaly power_margin_decay_per_step stays in
+        # power_margin_w units (not raw watts).
+        load_w = params["base_power_draw_w"] + fan_power + bypass_power
+        margin_factor = float(params.get("power_draw_to_margin_factor", 0.01875))
+        self.power_margin_w -= load_w * margin_factor
 
         if active_flags:
             self._event_log.append({"step": self.step_count, "kind": EVENT_ANOMALY, "flags": active_flags})

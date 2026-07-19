@@ -36,6 +36,10 @@ def default_parameters() -> Dict[str, float]:
         "permanent_bypass_power_w": 20.0,
         "load_reduction_factor": 0.6,
         "base_power_draw_w": 200.0,
+        # Nameplate watts → power_margin_w units per step (single scale for all loads).
+        # Default preserves prior equilibrium drain ≈4.8 at fan_speed=0.7:
+        # (200 + 80*0.7) * 0.01875 = 4.8
+        "power_draw_to_margin_factor": 0.01875,
         "eps_support_duration_steps": 5.0,
     }
 

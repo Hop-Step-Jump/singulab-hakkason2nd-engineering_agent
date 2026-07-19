@@ -67,10 +67,10 @@ def run_1b_smoke(
     ogs_goal: Optional[OgsGoal] = None,
     action_timeout_s: float = 120.0,
     topic_timeout_s: float = 15.0,
-    request_co2_amount: float = 25.0,
+    request_co2_amount: float = 0.025,
 ) -> Eclss1bSmokeReport:
     """Exercise Ros2EclssBridge against a live SSOS ECLSS stack."""
-    ogs_goal = ogs_goal or OgsGoal(input_water_mass=10.0)
+    ogs_goal = ogs_goal or OgsGoal()
     launch_hint = f"bash /root/ssos-eclss-headless.sh  # or: ros2 launch {LAUNCH_HEADLESS_ECLSS}"
     report = Eclss1bSmokeReport(ok=False, launch_hint=launch_hint)
 

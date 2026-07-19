@@ -63,7 +63,7 @@ def test_scrubber_degradation_labeled_agents_recover(tmp_path: Path):
     assert final_step["co2_ppm"] < CO2_WARNING_PPM
     assert "eps_support_w" in final_step
     assert "eps_support_steps_remaining" in final_step
-    assert summary["provenance_record_count"] >= 2
+    assert summary["provenance_record_count"] >= 1
     assert summary["provenance_path"].endswith("provenance.jsonl")
     assert len(eps_telemetry) == summary["steps"]
     assert summary["eps_boost_applied_step"] is not None

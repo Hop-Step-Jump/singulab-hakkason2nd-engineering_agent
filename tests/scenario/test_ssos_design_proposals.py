@@ -70,12 +70,12 @@ def test_apply_graph_rewire():
 
 def test_build_design_proposals_from_policy():
     policy = {
-        "co2_storage_high_kg": 1500.0,
-        "o2_storage_low_kg": 450.0,
-        "request_co2_amount": 25.0,
+        "co2_storage_high_kg": 1.5,
+        "o2_storage_low_kg": 0.45,
+        "request_co2_amount": 0.025,
         "request_co2_before_ogs": True,
-        "ars_goal": {"initial_co2_mass": 1800.0},
-        "ogs_goal": {"input_water_mass": 10.0},
+        "ars_goal": {"initial_co2_mass": 1.8},
+        "ogs_goal": {"input_water_mass": 0.01},
     }
     doc = build_design_proposals_from_run(
         proposed_by="eclss_operator_1",

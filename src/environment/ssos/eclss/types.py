@@ -1,4 +1,8 @@
-"""Datatypes for SSOS ECLSS bridge and smoke tests."""
+"""Datatypes for SSOS ECLSS bridge and smoke tests.
+
+Mass fields use **kilograms** inside engineering_agents. Ros2EclssBridge converts
+to/from upstream SSOS **grams** at the ROS boundary. See ``eclss.units``.
+"""
 
 from __future__ import annotations
 
@@ -8,7 +12,15 @@ from typing import Any, Dict, List, Optional
 
 @dataclass
 class ArsGoal:
-    initial_co2_mass: float = 1800.0
+    """Air revitalisation action goal.
+
+    Units:
+    - ``initial_co2_mass``: kilograms
+    - ``initial_moisture_content``: percent (0–100)
+    - ``initial_contaminants``: percent (0–100)
+    """
+
+    initial_co2_mass: float = 1.8
     initial_moisture_content: float = 25.0
     initial_contaminants: float = 5.0
 
@@ -53,7 +65,14 @@ class ArsActionResult:
 
 @dataclass
 class OgsGoal:
-    input_water_mass: float = 15.0
+    """Oxygen generation action goal.
+
+    Units:
+    - ``input_water_mass``: kilograms
+    - ``iodine_concentration``: mg/L
+    """
+
+    input_water_mass: float = 0.015
     iodine_concentration: float = 2.0
 
     def to_dict(self) -> Dict[str, float]:
@@ -62,6 +81,12 @@ class OgsGoal:
 
 @dataclass
 class WrsGoal:
+    """Water recovery action goal.
+
+    Units:
+    - ``urine_volume``: liters
+    """
+
     urine_volume: float = 2.0
 
     def to_dict(self) -> Dict[str, float]:
@@ -80,7 +105,10 @@ class ServiceResult:
 
 @dataclass
 class EclssTelemetrySnapshot:
-    """Latest ECLSS storage/diagnostic readings from SSOS topics."""
+    """Latest ECLSS storage/diagnostic readings from SSOS topics.
+
+    Mass fields are **kilograms**; product water is **liters**.
+    """
 
     co2_storage_kg: Optional[float] = None
     o2_storage_kg: Optional[float] = None
