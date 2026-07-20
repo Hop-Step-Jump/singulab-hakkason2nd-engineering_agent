@@ -13,7 +13,7 @@ from environment.ssos.eclss.types import (
     WrsGoal,
 )
 from environment.ssos.eclss.mock.backend import MockEclssBackend
-from environment.ssos.eclss.units import o2_generated_kg, water_mass_kg_to_liters
+from environment.ssos.eclss.units import o2_generated_kg, water_kg_to_l
 
 
 class LoopMockEclssBackend(MockEclssBackend):
@@ -57,7 +57,7 @@ class LoopMockEclssBackend(MockEclssBackend):
             o2_gain = self._ogs_o2_gain_fallback
         self._o2 += o2_gain
         # Keep LoopMock public water in sync with parent mass→liter draw (U2/U4).
-        self._water = max(0.0, self._water - water_mass_kg_to_liters(water_kg))
+        self._water = max(0.0, self._water - water_kg_to_l(water_kg))
         # Sabatier side-effect scales with water processed (replaces fixed 30 kg).
         sabatier_co2 = min(self._co2, water_kg * 2.0)
         self._co2 = max(0.0, self._co2 - sabatier_co2)

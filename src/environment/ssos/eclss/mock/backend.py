@@ -12,7 +12,7 @@ from environment.ssos.eclss.types import (
     ServiceResult,
     WrsGoal,
 )
-from environment.ssos.eclss.units import o2_generated_kg, water_mass_kg_to_liters
+from environment.ssos.eclss.units import o2_generated_kg, water_kg_to_l
 
 # Approximate WRS pipeline recovery (UPA × filter × ionization from SSOS defaults).
 _WRS_URINE_RECOVERY = 0.95 * 0.90 * 0.98
@@ -56,7 +56,7 @@ class MockEclssBackend:
     def send_oxygen_generation_goal(self, goal: OgsGoal) -> ActionResult:
         self.last_ogs_goal = goal
         water_kg = float(goal.input_water_mass)
-        water_used_l = water_mass_kg_to_liters(water_kg)
+        water_used_l = water_kg_to_l(water_kg)
         reserve = self._telemetry.product_water_reserve_l or 0.0
         self._telemetry.product_water_reserve_l = max(0.0, reserve - water_used_l)
         o2_kg = o2_generated_kg(water_kg)

@@ -27,7 +27,7 @@ import time
 from pathlib import Path
 from typing import List, Optional, Sequence, Tuple
 
-from environment.ssos.eclss.units import mass_g_to_kg, mass_kg_to_g
+from environment.ssos.eclss.units import g_to_kg, kg_to_g
 from environment.ssos.eclss.ros2.topics import (
     ACTION_AIR_REVITALISATION,
     ACTION_TYPE_AIR_REVITALISATION,
@@ -166,7 +166,7 @@ def send_ars_goal_cli(goal: ArsGoal, timeout_s: float = 120.0) -> Tuple[Optional
     ``ArsGoal.initial_co2_mass`` is kilograms; SSOS action fields are grams.
     """
     goal_yaml = (
-        f"{{initial_co2_mass: {mass_kg_to_g(goal.initial_co2_mass)}, "
+        f"{{initial_co2_mass: {kg_to_g(goal.initial_co2_mass)}, "
         f"initial_moisture_content: {goal.initial_moisture_content}, "
         f"initial_contaminants: {goal.initial_contaminants}}}"
     )
@@ -211,7 +211,7 @@ def send_ars_goal_cli(goal: ArsGoal, timeout_s: float = 120.0) -> Tuple[Optional
             success=success,
             cycles_completed=cycles or 0,
             total_vents=vents or 0,
-            total_co2_vented=mass_g_to_kg(co2_vented) if co2_vented is not None else 0.0,
+            total_co2_vented=g_to_kg(co2_vented) if co2_vented is not None else 0.0,
             summary_message=summary or "",
         ),
         None,
