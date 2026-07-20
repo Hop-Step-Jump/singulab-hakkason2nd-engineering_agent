@@ -679,7 +679,7 @@ _ECLSS_OPERATIONAL_LEVERS = """\
 - air_revitalisation: ARS action — payload fields initial_co2_mass (kg),
   initial_moisture_content (percent 0–100), initial_contaminants (percent 0–100).
 - oxygen_generation: OGS action — payload fields input_water_mass (kg),
-  iodine_concentration (mg/L). O₂ yield ≈ 0.89 kg per kg water × efficiency.
+  iodine_concentration (mg/L).
 - request_co2: Service call — payload {"amount": <kg>} Sabatier feedstock before OGS when needed.
 - request_o2: Service call — payload {"amount": <kg>} withdraw O2 from plant /o2_storage reserve.
 Actions are asynchronous; issue only commands justified by Telemetry and team discourse."""

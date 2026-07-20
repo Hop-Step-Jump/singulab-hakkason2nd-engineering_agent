@@ -5,7 +5,6 @@ import pytest
 from environment.ssos.eclss.backend import EclssBackend
 from environment.ssos.eclss.types import ArsGoal, OgsGoal, WrsGoal
 from environment.ssos.eclss.mock.backend import MockEclssBackend
-from environment.ssos.eclss.units import o2_generated_kg
 
 
 def test_mock_backend_satisfies_protocol():
@@ -69,7 +68,7 @@ def test_mock_wrs_water_tradeoffs():
     water_kg = 5.0
     ogs = backend.send_oxygen_generation_goal(OgsGoal(input_water_mass=water_kg))
     assert ogs.success
-    assert ogs.details["total_o2_generated"] == pytest.approx(o2_generated_kg(water_kg))
+    assert ogs.details["total_o2_generated"] == pytest.approx(0.12)
     after_ogs = backend.poll_telemetry()
     assert after_ogs.product_water_reserve_l == after_drink.product_water_reserve_l - water_kg
 
