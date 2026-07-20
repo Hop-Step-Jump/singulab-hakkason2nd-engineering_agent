@@ -222,8 +222,9 @@ CLI v3 では **ホスト 1 コマンド実行と results マウント** に集�
 
 ## BL-007: SSOS ↔ EA 時間・step 同期（接続の次段階） { #bl-007 }
 
-**ステータス**: 検討中（CLI v3 / Phase 8 とは別トラック）  
-**関連**: [scenario-ssos-eclss-loop.md](../scenario-ssos-eclss-loop.md)、[ssos_eclss_physical_phenomena_overview.md](ssos_eclss_loop/ssos_eclss_physical_phenomena_overview.md)、BL-004（WRS mock）、BL-006（run 境界の再現性）
+**ステータス**: 検討中（CLI v3 / Phase 8 とは別トラック）／方策 A の一部は **実装中**  
+**関連**: [scenario-ssos-eclss-loop.md](../scenario-ssos-eclss-loop.md)、[ssos_eclss_physical_phenomena_overview.md](ssos_eclss_loop/ssos_eclss_physical_phenomena_overview.md)、BL-004（WRS mock）、BL-006（run 境界の再現性）  
+**実装 PR**: [#35](https://github.com/hirototamura/engineering_agents/pull/35)（`fix/correct-LoopMock-dynamics` — D1–D5）
 
 ### 背景
 
@@ -245,13 +246,19 @@ CLI v3 では **ホスト 1 コマンド実行と results マウント** に集�
 
 本リポジトリに **SSOS 相当の統合 Mock** を置き、トピック生成・WRS/OGS/ARS 動態・EPS 連携を EA 側で一元管理する。
 
+当初からスコープに含むのは、mock 上で **ARS/OGS Action の goal フィールドが動態に効くこと**（固定削減・固定ゲインのままでは設計提案の再適用検証が成立しない）。これを **D1** として実装する。
+
 | 項目 | 内容 |
 | --- | --- |
 | スコープ | `LoopMockEclssBackend` 拡張または `SsosPlantMock` 新設。`/co2_storage` 等の契約を `eclss_topics.py` と整合 |
 | WRS / OGS | mock 上で Action/Service 効果を step 同期で再現（BL-004 WRS team と接続） |
+| **D1（実装中）** | ARS/OGS goal（`initial_co2_mass` / `input_water_mass`）に応じて削減・生成をスケールする。固定削減・固定ゲインをやめる → **[#35](https://github.com/hirototamura/engineering_agents/pull/35)** |
+| D2–D5（同 PR） | 水二重管理解消、`request_co2` 引き出し、failure 時の物理停止、負値・非有限値の拒否（質量保存・検証前提） |
 | EPS | 既存 `MockEpsBackend` / `EpsStack` との単一 tick 駆動 |
 | メリット | upstream 依存なし、pytest 高速、**step = 物理 tick** を設計できる |
 | デメリット | SSOS 実装との乖離リスク。契約テスト（topic 名・Action 型）の維持が必要 |
+
+**実装方針**: D1（および質量保存に必要な D2–D5）は [#35](https://github.com/hirototamura/engineering_agents/pull/35) で実装する。WRS 拡充・EPS 単一 tick・`SsosPlantMock` 新設など残りは本 BL の未着手分として残す。
 
 ### 方策 B — SSOS upstream で sim clock / tick 同期
 
