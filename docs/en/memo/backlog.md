@@ -208,9 +208,8 @@ Target: `src/tools/dashboard/ssos_views.py`, `app.py` — duration, threshold li
 
 ## BL-007: SSOS ↔ EA time and step synchronization (next integration phase) { #bl-007 }
 
-**Status**: Under consideration (separate from CLI v3 / Phase 8); part of Option A is **in progress**  
-**Related**: [scenario-ssos-eclss-loop.md](../scenario-ssos-eclss-loop.md), [ssos_eclss_physical_phenomena_overview.md](ssos_eclss_loop/ssos_eclss_physical_phenomena_overview.md), BL-004 (WRS mock), BL-006 (run-boundary reproducibility)  
-**Implementation PR**: [#35](https://github.com/hirototamura/engineering_agents/pull/35) (`fix/correct-LoopMock-dynamics` — D1–D5)
+**Status**: Under consideration (separate from CLI v3 / Phase 8)  
+**Related**: [scenario-ssos-eclss-loop.md](../scenario-ssos-eclss-loop.md), [ssos_eclss_physical_phenomena_overview.md](ssos_eclss_loop/ssos_eclss_physical_phenomena_overview.md), BL-004 (WRS mock), BL-006 (run-boundary reproducibility)
 
 ### Background
 
@@ -232,19 +231,13 @@ Target: `src/tools/dashboard/ssos_views.py`, `app.py` — duration, threshold li
 
 Build an **integrated SSOS-equivalent mock** in this repo: topic semantics, WRS/OGS/ARS dynamics, EPS coupling under EA-controlled ticks.
 
-From the start, Option A includes making **ARS/OGS Action goal fields affect mock dynamics** (fixed reduction/gain breaks re-apply verification of design proposals). That slice is tracked as **D1**.
-
 | Item | Contents |
 | --- | --- |
 | Scope | Extend `LoopMockEclssBackend` or add `SsosPlantMock`; align with `eclss_topics.py` |
 | WRS / OGS | Step-synced Action/Service effects on mock (links to BL-004 WRS team) |
-| **D1 (in progress)** | Scale ARS/OGS reduction/generation from goals (`initial_co2_mass` / `input_water_mass`); stop fixed reduction/gain → **[#35](https://github.com/hirototamura/engineering_agents/pull/35)** |
-| D2–D5 (same PR) | Fix dual water state, `request_co2` withdrawal, fail closed on subsystem failure, reject negative/non-finite amounts (mass conservation / verification prerequisites) |
 | EPS | Drive with existing `MockEpsBackend` / `EpsStack` on same tick |
 | Pros | No upstream dependency; fast pytest; **step = physics tick** by design |
 | Cons | Drift from real SSOS; need contract tests for topics and Action types |
-
-**Implementation**: D1 (and D2–D5 needed for mass conservation) are implemented in [#35](https://github.com/hirototamura/engineering_agents/pull/35). Remaining Option A work (WRS expansion, unified EPS tick, optional `SsosPlantMock`) stays open on this BL.
 
 ### Option B — Upstream SSOS sim clock / tick sync
 
