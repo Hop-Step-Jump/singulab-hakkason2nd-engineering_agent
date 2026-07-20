@@ -136,11 +136,21 @@ def run_1b_smoke(
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="SSOS ECLSS Phase 1b smoke (ARS + OGS bridge)")
     parser.add_argument("--json-out", type=Path, help="Write JSON report to this path")
-    parser.add_argument("--input-water-mass", type=float, default=10.0)
+    parser.add_argument(
+        "--input-water-mass",
+        type=float,
+        default=0.015,
+        help="OGS input_water_mass in kilograms (converted to grams for SSOS)",
+    )
     parser.add_argument("--iodine", type=float, default=2.0)
     parser.add_argument("--action-timeout", type=float, default=120.0)
     parser.add_argument("--topic-timeout", type=float, default=15.0)
-    parser.add_argument("--co2-request", type=float, default=25.0)
+    parser.add_argument(
+        "--co2-request",
+        type=float,
+        default=0.025,
+        help="request_co2 amount in kilograms (converted to grams for SSOS)",
+    )
     args = parser.parse_args(list(argv) if argv is not None else None)
 
     goal = OgsGoal(input_water_mass=args.input_water_mass, iodine_concentration=args.iodine)
