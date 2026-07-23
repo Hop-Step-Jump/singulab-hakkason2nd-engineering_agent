@@ -202,14 +202,15 @@ def test_ssos_eclss_loop_labeled_agents_ogs_when_o2_low(tmp_path: Path):
     events = _read_jsonl(run_dir / "events.jsonl")
 
     assert summary["ogs_invoked_step"] == 1
-    assert summary["co2_requested_step"] == 1
+    # Default policy leaves CO₂ feedstock to OGS-internal Sabatier (no explicit request_co2).
+    assert summary.get("co2_requested_step") is None
     applied_kinds = {
         (e.get("command") or {}).get("kind")
         for e in events
         if e.get("kind") == "/eclss/events/operational_applied"
     }
     assert "oxygen_generation" in applied_kinds
-    assert "request_co2" in applied_kinds
+    assert "request_co2" not in applied_kinds
 
 
 def test_resolve_backend_kind_from_env(monkeypatch):

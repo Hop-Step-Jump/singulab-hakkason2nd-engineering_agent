@@ -17,8 +17,10 @@ team:
 # Band thresholds (co2_storage_high_kg, o2_storage_low_kg, …) are derived from
 # scenario.yaml thresholds at run time — do not duplicate them here.
 # Mass fields are kilograms; water volumes are liters.
+# request_co2_before_ogs defaults off: real SSOS OGS already calls /ars/request_co2
+# internally for Sabatier; an explicit pre-request would double-withdraw CO₂.
 policy:
-  request_co2_before_ogs: true
+  request_co2_before_ogs: false
   request_co2_amount: 0.025
   ars_goal:
     initial_co2_mass: 1.8

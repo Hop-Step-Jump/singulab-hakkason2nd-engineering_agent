@@ -150,7 +150,7 @@ team:
   id_prefix: eclss_operator
 
 policy:   # labeled_rule_base のみ。閾値は scenario.yaml から実行時マージ
-  request_co2_before_ogs: true
+  request_co2_before_ogs: false
   request_co2_amount: 25.0
   ars_goal:
     initial_co2_mass: 1800.0

@@ -249,7 +249,7 @@ class SsosEclssLoopTeam(Team):
             )
 
         if o2 is not None and o2 <= o2_low and not self.state.ogs_invoked:
-            if self.policy.get("request_co2_before_ogs", True) and not self.state.co2_requested:
+            if self.policy.get("request_co2_before_ogs", False) and not self.state.co2_requested:
                 amount = float(self.policy.get("request_co2_amount", 0.025))
                 commands.append(
                     EclssOperationalCommand(

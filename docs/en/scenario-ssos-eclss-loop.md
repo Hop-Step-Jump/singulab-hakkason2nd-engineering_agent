@@ -151,7 +151,7 @@ team:
   id_prefix: eclss_operator
 
 policy:   # labeled_rule_base only. Thresholds merged from scenario.yaml at runtime
-  request_co2_before_ogs: true
+  request_co2_before_ogs: false
   request_co2_amount: 25.0
   ars_goal:
     initial_co2_mass: 1800.0

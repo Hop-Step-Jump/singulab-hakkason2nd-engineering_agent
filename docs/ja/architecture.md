@@ -631,7 +631,7 @@ SsosEclssLoopTeam                         # scenario/agents/ssos_eclss_loop_team
 | 挙動                   | トリガー                         |
 | -------------------- | ---------------------------- |
 | `air_revitalisation` | CO₂ ≥ high、ARS 未起動           |
-| `request_co2`        | O₂ ≤ low、OGS 前（policy 既定 ON） |
+| `request_co2`        | O₂ ≤ low、OGS 前（policy 既定 OFF。Sabatier 原料は OGS 内部要求に任せる） |
 | `oxygen_generation`  | O₂ ≤ low、OGS 未起動             |
 | re-arm               | 改善なければ次 step で再試行            |
 
