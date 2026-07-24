@@ -12,7 +12,7 @@ from environment.ssos.eclss.types import (
     ServiceResult,
     WrsGoal,
 )
-from environment.ssos.eclss.units import water_kg_to_l
+from environment.ssos.eclss.units import o2_generated_kg, water_kg_to_l
 
 # Approximate WRS pipeline recovery (UPA × filter × ionization from SSOS defaults).
 _WRS_URINE_RECOVERY = 0.95 * 0.90 * 0.98
@@ -59,12 +59,12 @@ class MockEclssBackend:
         water_used_l = water_kg_to_l(water_kg)
         reserve = self._telemetry.product_water_reserve_l or 0.0
         self._telemetry.product_water_reserve_l = max(0.0, reserve - water_used_l)
+        o2_kg = o2_generated_kg(water_kg)
         return ActionResult(
             success=True,
             summary_message="mock oxygen_generation complete",
             details={
-                # Fixed mock O₂ gain (kg). Stoichiometric yield is out of scope for unit fixes.
-                "total_o2_generated": 0.12,
+                "total_o2_generated": o2_kg,
                 "input_water_mass": water_kg,
                 "water_used_l": water_used_l,
             },
