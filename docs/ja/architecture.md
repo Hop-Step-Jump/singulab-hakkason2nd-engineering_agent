@@ -631,7 +631,7 @@ SsosEclssLoopTeam                         # scenario/agents/ssos_eclss_loop_team
 | 挙動                   | トリガー                         |
 | -------------------- | ---------------------------- |
 | `air_revitalisation` | CO₂ ≥ high、ARS 未起動           |
-| `request_co2`        | O₂ ≤ low、OGS 前（policy 既定 OFF。Sabatier 原料は OGS 内部要求に任せる） |
+| `request_co2`        | O₂ ≤ low、OGS 前（`request_co2_before_ogs: true` のときのみ。既定 OFF。Sabatier 原料は OGS 内部要求に任せる）。LoopMock では `true` だと OGS Sabatier 減算と同一 step で二重減算しうる（バッファなし） |
 | `oxygen_generation`  | O₂ ≤ low、OGS 未起動             |
 | re-arm               | 改善なければ次 step で再試行            |
 

@@ -249,6 +249,9 @@ class SsosEclssLoopTeam(Team):
             )
 
         if o2 is not None and o2 <= o2_low and not self.state.ogs_invoked:
+            # Opt-in: explicit request_co2 before OGS. Default is false because real SSOS
+            # OGS already calls /ars/request_co2 for Sabatier. With LoopMock (no CO₂ buffer),
+            # true also runs OGS Sabatier storage debit in the same step → double CO₂ draw.
             if self.policy.get("request_co2_before_ogs", False) and not self.state.co2_requested:
                 amount = float(self.policy.get("request_co2_amount", 0.025))
                 commands.append(
@@ -687,7 +690,9 @@ _ECLSS_OPERATIONAL_LEVERS = """\
   initial_moisture_content (percent 0–100), initial_contaminants (percent 0–100).
 - oxygen_generation: OGS action — payload fields input_water_mass (kg),
   iodine_concentration (mg/L).
-- request_co2: Service call — payload {"amount": <kg>} Sabatier feedstock before OGS when needed.
+- request_co2: Service call — payload {"amount": <kg>} optional Sabatier feedstock;
+  default policy leaves this to OGS-internal /ars/request_co2 (use only when
+  request_co2_before_ogs is explicitly enabled or discourse justifies it).
 - request_o2: Service call — payload {"amount": <kg>} withdraw O2 from plant /o2_storage reserve.
 Actions are asynchronous; issue only commands justified by Telemetry and team discourse."""
 

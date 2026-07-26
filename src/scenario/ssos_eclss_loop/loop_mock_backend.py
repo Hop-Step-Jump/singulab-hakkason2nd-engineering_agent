@@ -89,6 +89,8 @@ class LoopMockEclssBackend(MockEclssBackend):
         o2_gain = float(result.details.get("total_o2_generated", 0.0))
         self._o2 += max(0.0, o2_gain)
         water_kg = max(0.0, float(goal.input_water_mass))
+        # Models OGS-internal Sabatier /ars/request_co2. If labeled also issued
+        # request_co2_before_ogs in this step, LoopMock (no buffer) double-debits.
         sabatier_co2 = min(self._co2, water_kg * self._sabatier_co2_per_water)
         self._co2 = max(0.0, self._co2 - sabatier_co2)
         self._sync_parent_telemetry()
@@ -101,22 +103,26 @@ class LoopMockEclssBackend(MockEclssBackend):
         )
 
     def request_co2(self, amount: float) -> ServiceResult:
-        """Withdraw CO2 from plant storage for Sabatier feedstock (D3)."""
+        """Withdraw CO2 from plant storage for Sabatier feedstock (D3).
+
+        All-or-nothing like SSOS ``/ars/request_co2``: reject without mutating
+        storage when the full requested mass is unavailable (no partial grant).
+        """
         result = super().request_co2(amount)
         if not result.success:
             return result
-        granted = min(self._co2, float(amount))
-        if granted <= 0.0:
+        need = float(amount)
+        if self._co2 < need:
             return ServiceResult(
                 success=False,
                 response_value=0.0,
                 message="insufficient CO2 in storage",
             )
-        self._co2 = max(0.0, self._co2 - granted)
+        self._co2 -= need
         self._sync_parent_telemetry()
         return ServiceResult(
             success=True,
-            response_value=granted,
+            response_value=need,
             message="mock co2 delivered",
         )
 

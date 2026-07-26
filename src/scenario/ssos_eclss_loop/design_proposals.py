@@ -232,6 +232,7 @@ def build_design_proposals_from_run(
         )
 
     if "request_co2_amount" in policy or "request_co2_before_ogs" in policy:
+        # before_ogs true is opt-in; on LoopMock it can double-debit with OGS Sabatier.
         changes.append(
             {
                 "change_kind": "service_config",

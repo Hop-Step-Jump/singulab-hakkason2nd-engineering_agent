@@ -190,6 +190,35 @@ def test_loop_mock_request_co2_withdraws_storage():
     assert backend.poll_telemetry().co2_storage_kg == pytest.approx(0.75)
 
 
+def test_loop_mock_request_co2_rejects_partial_insufficient():
+    """SSOS /ars/request_co2 rejects when storage cannot cover the full request."""
+    backend = LoopMockEclssBackend(
+        {
+            "simulation": {"initial_co2_storage_kg": 0.1},
+            "mock_dynamics": {},
+        }
+    )
+    before = backend.poll_telemetry().co2_storage_kg
+    result = backend.request_co2(0.25)
+    assert result.success is False
+    assert result.response_value == pytest.approx(0.0)
+    assert "insufficient" in (result.message or "").lower()
+    assert backend.poll_telemetry().co2_storage_kg == pytest.approx(before)
+
+
+def test_loop_mock_request_co2_exact_amount_succeeds():
+    backend = LoopMockEclssBackend(
+        {
+            "simulation": {"initial_co2_storage_kg": 0.25},
+            "mock_dynamics": {},
+        }
+    )
+    result = backend.request_co2(0.25)
+    assert result.success
+    assert result.response_value == pytest.approx(0.25)
+    assert backend.poll_telemetry().co2_storage_kg == pytest.approx(0.0)
+
+
 def test_loop_mock_failure_blocks_ars_physics():
     backend = LoopMockEclssBackend(
         {

@@ -615,7 +615,7 @@ SsosEclssLoopTeam                         # scenario/agents/ssos_eclss_loop_team
 | Behavior | Trigger |
 | --- | --- |
 | `air_revitalisation` | CO₂ ≥ high, ARS not yet dispatched |
-| `request_co2` | O₂ ≤ low, before OGS (policy default OFF; OGS handles Sabatier feedstock) |
+| `request_co2` | O₂ ≤ low, before OGS when `request_co2_before_ogs: true` (default OFF; OGS handles Sabatier feedstock). On LoopMock, `true` can double-debit CO₂ with OGS Sabatier (no buffer). |
 | `oxygen_generation` | O₂ ≤ low, OGS not yet dispatched |
 | re-arm | retry next step if no improvement |
 

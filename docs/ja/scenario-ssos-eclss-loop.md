@@ -89,7 +89,9 @@ SSOS の ECLSS は、閉鎖環境の **CO₂ 除去（ARS）**、**O₂ 生成�
 | 条件（目安） | 運用コマンド |
 | --- | --- |
 | CO₂ ≥ `co2_storage_high_kg`（デフォルト 1500 kg） | `air_revitalisation`（ARS） |
-| O₂ ≤ `o2_storage_low_kg`（デフォルト 450 kg） | 先に `request_co2`（policy 既定 ON）→ `oxygen_generation`（OGS） |
+| O₂ ≤ `o2_storage_low_kg`（デフォルト 450 kg） | `oxygen_generation`（OGS）。`request_co2_before_ogs: true` のときだけ先に `request_co2`（既定は **false**） |
+
+**`request_co2_before_ogs`:** 既定 OFF。実 SSOS では OGS が Sabatier 用に `/ars/request_co2` を内部呼び出しするため。`true` にすると（設計提案含む）、同一 step で明示 `request_co2` と LoopMock の OGS Sabatier 減算が両方走り、**バッファなしの簡略 mock では CO₂ が二重減算されうる**。
 
 **re-arm**: ARS / OGS を打った後もストレージが改善しなければ、次 step で再試行可能（`co2_at_ars_dispatch` / `o2_at_ogs_dispatch` 境界）。
 

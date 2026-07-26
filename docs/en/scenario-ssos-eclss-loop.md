@@ -90,7 +90,9 @@ Baseline runs show how storage evolves without agent intervention.
 | Condition (typical) | Operational command |
 | --- | --- |
 | CO₂ ≥ `co2_storage_high_kg` (default 1500 kg) | `air_revitalisation` (ARS) |
-| O₂ ≤ `o2_storage_low_kg` (default 450 kg) | `request_co2` first (policy default ON) → `oxygen_generation` (OGS) |
+| O₂ ≤ `o2_storage_low_kg` (default 450 kg) | `oxygen_generation` (OGS); optional `request_co2` first when `request_co2_before_ogs: true` (default **false**) |
+
+**`request_co2_before_ogs`:** default off so feedstock matches real SSOS (OGS calls `/ars/request_co2` itself). Opt-in `true` (including via design proposals) can **double-debit CO₂ on LoopMock** in the same step: explicit `request_co2` plus OGS Sabatier storage subtract — LoopMock has no intermediate CO₂ buffer.
 
 **Re-arm**: If storage does not improve after ARS / OGS, the next step can retry (`co2_at_ars_dispatch` / `o2_at_ogs_dispatch` boundaries).
 
