@@ -127,22 +127,26 @@ class LoopMockEclssBackend(MockEclssBackend):
         )
 
     def request_o2(self, amount: float) -> ServiceResult:
-        """Withdraw O2 from plant storage (/o2_storage) when the service succeeds."""
+        """Withdraw O2 from plant storage (/o2_storage) when the service succeeds.
+
+        All-or-nothing like SSOS ``/ogs/request_o2``: reject without mutating
+        storage when the full requested mass is unavailable (no partial grant).
+        """
         result = super().request_o2(amount)
         if not result.success:
             return result
-        granted = min(self._o2, float(amount))
-        if granted <= 0.0:
+        need = float(amount)
+        if self._o2 < need:
             return ServiceResult(
                 success=False,
                 response_value=0.0,
                 message="insufficient O2 in storage",
             )
-        self._o2 = max(0.0, self._o2 - granted)
+        self._o2 -= need
         self._sync_parent_telemetry()
         return ServiceResult(
             success=True,
-            response_value=granted,
+            response_value=need,
             message="mock o2 delivered",
         )
 
