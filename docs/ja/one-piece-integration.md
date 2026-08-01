@@ -181,7 +181,7 @@ One Piece `SsotProvenanceRecord` 概念に準拠。必須フィールド:
 
 | 経路 | 状態 |
 | --- | --- |
-| Mock ECLSS デフォルトトポロジ | scrubber — `environment/eclss_ops/design_state.py` |
+| Mock ECLSS デフォルトトポロジ | scrubber — `environment/scrubber/eclss_ops/design_state.py` |
 | SSOS 実 ECLSS 運用 | ssos — `Ros2EclssBridge` + `EclssBackend`（Phase 0–7 完了） |
 | One Piece コネクタ [`ssos.py`](https://github.com/hirototamura/one-piece/blob/main/packages/connectors/one_piece_connectors/ssos.py) | 任意 — 実 SSOS から初期 `SystemElement` + ICD グラフをシード |
 

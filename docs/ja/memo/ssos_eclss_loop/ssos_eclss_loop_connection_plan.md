@@ -369,7 +369,7 @@ PYTHONPATH=src pytest tests/scenario/test_ssos_eclss_loop.py::test_ssos_eclss_lo
 | 項目 | 内容 |
 |------|------|
 | レイヤ | **C — `Ros2EclssBridge` クライアント remap**（ROS launch remap ではない） |
-| モジュール | `environment/ssos/graph_rewire.py` |
+| モジュール | `environment/ssos/eclss/ros2/graph_rewire.py` |
 | 消費側 | `build_eclss_backend()` → `Ros2EclssBridge(topic_remap=…)` |
 | テスト | `tests/environment/test_graph_rewire.py`、`scripts/run_graph_rewire_e2e.sh` |
 

@@ -152,7 +152,7 @@ Python モック（`StationSimulator`）上の CO₂ スクラバー異常シナ
 
 ### ヘルス — `health_metrics.jsonl`
 
-`compute_health_metrics()` — `src/environment/eclss_ops/telemetry.py`
+`compute_health_metrics()` — `src/environment/scrubber/eclss_ops/telemetry.py`
 
 ```json
 {"step": 5, "co2_status": "safe", "power_status": "safe", "overall": "safe"}

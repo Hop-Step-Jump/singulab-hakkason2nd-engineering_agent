@@ -195,7 +195,7 @@ llm:
 
 ### graph_rewire（client remap — Phase 7）
 
-`design_proposals.json` の `graph_rewire` または `scenario.yaml` の `ssos_graph.rewires` は、**次 run** の `Ros2EclssBridge` が `ros2 topic echo` 等で使うトピック名をクライアント側で置換する（`environment/ssos/graph_rewire.py`）。
+`design_proposals.json` の `graph_rewire` または `scenario.yaml` の `ssos_graph.rewires` は、**次 run** の `Ros2EclssBridge` が `ros2 topic echo` 等で使うトピック名をクライアント側で置換する（`environment/ssos/eclss/ros2/graph_rewire.py`）。
 
 ROS launch ファイル側の remap（Phase 8）は [backlog BL-003](memo/backlog.md#bl-003)。
 
