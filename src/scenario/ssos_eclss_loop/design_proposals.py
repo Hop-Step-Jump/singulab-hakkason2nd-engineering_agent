@@ -78,6 +78,8 @@ def validate_design_proposals(data: Dict[str, Any]) -> List[str]:
 
 
 def _filter_action_profile_fields(subsystem: str, fields: Dict[str, Any]) -> Dict[str, Any]:
+    import math
+
     allowed = ACTION_PROFILE_FIELDS_BY_SUBSYSTEM.get(subsystem.lower())
     if allowed is None:
         raise ValueError(f"action_profile subsystem must be ars, ogs, or wrs, got {subsystem!r}")
@@ -86,7 +88,18 @@ def _filter_action_profile_fields(subsystem: str, fields: Dict[str, Any]) -> Dic
         raise ValueError(
             f"action_profile.fields contains unsupported keys for {subsystem}: {unknown}"
         )
-    filtered = {key: fields[key] for key in fields if key in allowed}
+    filtered: Dict[str, Any] = {}
+    for key in fields:
+        if key not in allowed:
+            continue
+        value = fields[key]
+        try:
+            number = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"action_profile.fields.{key} must be numeric") from exc
+        if not math.isfinite(number) or number < 0.0:
+            raise ValueError(f"action_profile.fields.{key} must be finite and non-negative")
+        filtered[key] = number
     if not filtered:
         raise ValueError(f"action_profile.fields must include at least one known field for {subsystem!r}")
     return filtered
@@ -110,16 +123,24 @@ def _apply_action_profile(config: Dict[str, Any], payload: Dict[str, Any]) -> No
 
 
 def _apply_service_config(config: Dict[str, Any], payload: Dict[str, Any]) -> None:
+    import math
+
     service = str(payload.get("service", "")).lower()
     policy = config.setdefault("agents", {}).setdefault("policy", {})
     if service == "request_co2":
         if "amount" in payload:
-            policy["request_co2_amount"] = float(payload["amount"])
+            amount = float(payload["amount"])
+            if not math.isfinite(amount) or amount <= 0.0:
+                raise ValueError("request_co2 amount must be finite and positive")
+            policy["request_co2_amount"] = amount
         if "before_ogs" in payload:
             policy["request_co2_before_ogs"] = bool(payload["before_ogs"])
     elif service == "request_o2":
         if "amount" in payload:
-            policy["request_o2_amount"] = float(payload["amount"])
+            amount = float(payload["amount"])
+            if not math.isfinite(amount) or amount <= 0.0:
+                raise ValueError("request_o2 amount must be finite and positive")
+            policy["request_o2_amount"] = amount
     else:
         raise ValueError(f"unsupported service_config service: {service!r}")
 
@@ -181,84 +202,186 @@ def apply_design_proposals(
     return merged
 
 
+def _append_threshold_bump(
+    changes: List[Dict[str, Any]],
+    *,
+    target_policy: str,
+    target_thresholds: str,
+    value: float,
+) -> None:
+    changes.append(
+        {
+            "change_kind": "set_parameter",
+            "payload": {"target": target_policy, "value": value},
+        }
+    )
+    changes.append(
+        {
+            "change_kind": "set_parameter",
+            "payload": {"target": target_thresholds, "value": value},
+        }
+    )
+
+
 def build_design_proposals_from_run(
     *,
     proposed_by: str,
     decision_source: str,
     policy: Dict[str, Any],
-    message: str = "SSOS ECLSS design profiles observed during the run.",
+    summary: Dict[str, Any] | None = None,
+    message: str = "SSOS ECLSS design profiles proposed from run outcomes.",
     baseline_graph: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
-    """Capture labeled-rule policy used at runtime as next-run design proposals."""
+    """Propose next-run design changes from run outcomes (not a no-op policy copy).
+
+    L8 (labeled_rule_base): prefer outcome-driven changes that differ from the
+    run-time policy so ``--apply-proposals`` can change the next simulation.
+
+    Fallback order when stress yields nothing: bump ``ars_goal``, else
+    ``ogs_goal``, else CO₂/O₂ thresholds (policy or defaults), else
+    ``request_co2`` service_config. Callers should skip writing
+    ``design_proposals.json`` when ``changes`` is still empty (e.g. LLM
+    parse failure); see ``scenario_run``.
+    """
+    summary = summary or {}
     changes: List[Dict[str, Any]] = []
 
-    ars_goal = policy.get("ars_goal") or {}
-    if ars_goal:
-        changes.append(
-            {
-                "change_kind": "action_profile",
-                "payload": {
-                    "subsystem": "ars",
-                    "action": "air_revitalisation",
-                    "fields": dict(ars_goal),
-                },
-            }
-        )
+    ars_goal = dict(policy.get("ars_goal") or {})
+    ogs_goal = dict(policy.get("ogs_goal") or {})
+    final_health = summary.get("final_health") or {}
+    final_co2 = summary.get("final_co2_storage_kg")
+    peak_co2 = summary.get("peak_co2_storage_kg")
+    min_o2 = summary.get("min_o2_storage_kg")
+    co2_high = float(policy.get("co2_storage_high_kg", 1.5))
+    o2_low = float(policy.get("o2_storage_low_kg", 0.45))
 
-    ogs_goal = policy.get("ogs_goal") or {}
-    if ogs_goal:
-        changes.append(
-            {
-                "change_kind": "action_profile",
-                "payload": {
-                    "subsystem": "ogs",
-                    "action": "oxygen_generation",
-                    "fields": dict(ogs_goal),
-                },
-            }
-        )
+    co2_stressed = (
+        str(final_health.get("co2_status", "")).lower() in {"warning", "critical"}
+        or (final_co2 is not None and float(final_co2) >= co2_high)
+        or (peak_co2 is not None and float(peak_co2) >= co2_high)
+    )
+    o2_stressed = (
+        str(final_health.get("o2_status", "")).lower() in {"warning", "critical"}
+        or (min_o2 is not None and float(min_o2) <= o2_low)
+    )
 
-    wrs_goal = policy.get("wrs_goal") or {}
-    if wrs_goal:
-        changes.append(
-            {
-                "change_kind": "action_profile",
-                "payload": {
-                    "subsystem": "wrs",
-                    "action": "water_recovery_systems",
-                    "fields": dict(wrs_goal),
-                },
-            }
-        )
-
-    if "request_co2_amount" in policy or "request_co2_before_ogs" in policy:
-        # before_ogs true is opt-in; on LoopMock it can double-debit with OGS Sabatier.
-        changes.append(
-            {
-                "change_kind": "service_config",
-                "payload": {
-                    "service": "request_co2",
-                    "amount": float(policy.get("request_co2_amount", 0.025)),
-                    "before_ogs": bool(policy.get("request_co2_before_ogs", False)),
-                },
-            }
-        )
-
-    for key in ("co2_storage_high_kg", "o2_storage_low_kg", "product_water_low_l"):
-        if key in policy:
-            value = float(policy[key])
+    if co2_stressed:
+        base_mass = float(ars_goal.get("initial_co2_mass", 1.8))
+        proposed_mass = round(base_mass * 1.25, 6)
+        if proposed_mass != base_mass:
             changes.append(
                 {
-                    "change_kind": "set_parameter",
-                    "payload": {"target": f"agents.policy.{key}", "value": value},
+                    "change_kind": "action_profile",
+                    "payload": {
+                        "subsystem": "ars",
+                        "action": "air_revitalisation",
+                        "fields": {"initial_co2_mass": proposed_mass},
+                    },
                 }
             )
+        proposed_high = round(co2_high * 0.9, 6)
+        if proposed_high > 0.0 and proposed_high != co2_high:
+            _append_threshold_bump(
+                changes,
+                target_policy="agents.policy.co2_storage_high_kg",
+                target_thresholds="thresholds.co2_storage_high_kg",
+                value=proposed_high,
+            )
+
+    if o2_stressed:
+        base_water = float(ogs_goal.get("input_water_mass", 0.015))
+        proposed_water = round(base_water * 1.25, 6)
+        if proposed_water != base_water:
             changes.append(
                 {
-                    "change_kind": "set_parameter",
-                    "payload": {"target": f"thresholds.{key}", "value": value},
+                    "change_kind": "action_profile",
+                    "payload": {
+                        "subsystem": "ogs",
+                        "action": "oxygen_generation",
+                        "fields": {"input_water_mass": proposed_water},
+                    },
                 }
             )
+        if "request_co2_amount" in policy:
+            base_amt = float(policy.get("request_co2_amount", 0.025))
+            proposed_amt = round(base_amt * 1.25, 6)
+            if proposed_amt != base_amt:
+                changes.append(
+                    {
+                        "change_kind": "service_config",
+                        "payload": {
+                            "service": "request_co2",
+                            "amount": proposed_amt,
+                            "before_ogs": bool(policy.get("request_co2_before_ogs", True)),
+                        },
+                    }
+                )
+
+    # L8 fallback: keep labeled proposals non-empty / non-no-op when possible.
+    # Empty ``changes`` is still allowed for callers that skip the write (LLM).
+    if not changes:
+        if ars_goal:
+            base_mass = float(ars_goal.get("initial_co2_mass", 1.8))
+            proposed_mass = round(base_mass * 1.1, 6)
+            if proposed_mass != base_mass:
+                changes.append(
+                    {
+                        "change_kind": "action_profile",
+                        "payload": {
+                            "subsystem": "ars",
+                            "action": "air_revitalisation",
+                            "fields": {"initial_co2_mass": proposed_mass},
+                        },
+                    }
+                )
+        elif ogs_goal:
+            base_water = float(ogs_goal.get("input_water_mass", 0.015))
+            proposed_water = round(base_water * 1.1, 6)
+            if proposed_water != base_water:
+                changes.append(
+                    {
+                        "change_kind": "action_profile",
+                        "payload": {
+                            "subsystem": "ogs",
+                            "action": "oxygen_generation",
+                            "fields": {"input_water_mass": proposed_water},
+                        },
+                    }
+                )
+        else:
+            proposed_high = round(co2_high * 0.9, 6)
+            if proposed_high > 0.0 and proposed_high != co2_high:
+                _append_threshold_bump(
+                    changes,
+                    target_policy="agents.policy.co2_storage_high_kg",
+                    target_thresholds="thresholds.co2_storage_high_kg",
+                    value=proposed_high,
+                )
+            else:
+                proposed_low = round(o2_low * 1.1, 6)
+                if proposed_low > 0.0 and proposed_low != o2_low:
+                    _append_threshold_bump(
+                        changes,
+                        target_policy="agents.policy.o2_storage_low_kg",
+                        target_thresholds="thresholds.o2_storage_low_kg",
+                        value=proposed_low,
+                    )
+                elif "request_co2_amount" in policy:
+                    base_amt = float(policy.get("request_co2_amount", 0.025))
+                    proposed_amt = round(base_amt * 1.1, 6)
+                    if proposed_amt != base_amt:
+                        changes.append(
+                            {
+                                "change_kind": "service_config",
+                                "payload": {
+                                    "service": "request_co2",
+                                    "amount": proposed_amt,
+                                    "before_ogs": bool(
+                                        policy.get("request_co2_before_ogs", True)
+                                    ),
+                                },
+                            }
+                        )
 
     doc: Dict[str, Any] = {
         "design_domain": DESIGN_DOMAIN,

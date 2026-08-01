@@ -156,8 +156,8 @@ def test_team_escalates_ars_on_critical_band():
     assert team.state.ars_critical_escalated is True
     assert team.state.ars_invoked is True
     assert backend.last_ars_goal is not None
-    # Escalated mass = policy ars_goal (0.9) * 1.5
-    assert backend.last_ars_goal.initial_co2_mass == pytest.approx(1.35)
+    # Escalated mass = policy ars_goal (1.8) * 1.5
+    assert backend.last_ars_goal.initial_co2_mass == pytest.approx(2.7)
 
 
 def test_loop_mock_request_o2_withdraws_plant_storage():
@@ -306,6 +306,27 @@ def test_llm_operational_parse_rejects_negative_amount():
     )
     assert cmd is None
     assert note is not None
+
+
+def test_apply_command_emits_rejected_on_failure():
+    from environment.ssos.eclss.types import ActionResult, ArsGoal
+    from scenario.agents.eclss_loop_types import EclssOperationalCommand
+
+    class _FailingBackend:
+        def send_air_revitalisation_goal(self, goal: ArsGoal) -> ActionResult:
+            return ActionResult(success=False, summary_message="ARS failed")
+
+    team = SsosEclssLoopTeam(_team_config())
+    event = team._apply_command(
+        _FailingBackend(),  # type: ignore[arg-type]
+        EclssOperationalCommand(
+            kind="air_revitalisation",
+            payload={"initial_co2_mass": 1.8},
+            issued_by="op_1",
+        ),
+    )
+    assert event is not None
+    assert event["kind"] == "/eclss/events/operational_rejected"
 
 
 def test_llm_operational_parse_air_revitalisation_and_request_co2():

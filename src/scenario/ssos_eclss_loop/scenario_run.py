@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import logging
 import os
@@ -252,6 +253,14 @@ class SsosEclssLoopScenario(Scenario):
             last_health = health
             log.append("telemetry", {"step": step, **snap.to_dict()})
             log.append("health_metrics", health)
+            # L10: per-step design/graph state for audit (ssos_graph remaps, etc.).
+            log.append(
+                "design_state",
+                {
+                    "step": step,
+                    "ssos_graph": copy.deepcopy(config.get("ssos_graph") or {}),
+                },
+            )
 
             if team is not None:
                 obs = EclssLoopObservation(step=step, telemetry=snap, health=health)
@@ -263,6 +272,8 @@ class SsosEclssLoopScenario(Scenario):
                     message_count += 1
                 for event in events:
                     log.append("events", {"step": step, **event})
+                    if event.get("kind") != "/eclss/events/operational_applied":
+                        continue
                     cmd = (event.get("command") or {})
                     cmd_kind = cmd.get("kind")
                     if cmd_kind == "air_revitalisation" and ars_invoked_step is None:
@@ -271,6 +282,29 @@ class SsosEclssLoopScenario(Scenario):
                         ogs_invoked_step = step
                     elif cmd_kind == "request_co2" and co2_requested_step is None:
                         co2_requested_step = step
+
+                # L5: refresh final telemetry/health after ops so summary reflects last actions.
+                if outcome.commands:
+                    snap = backend.poll_telemetry()
+                    if backend_kind == "ros2":
+                        _assert_ros2_storage_telemetry(step, snap)
+                    last_snap = snap
+                    if snap.co2_storage_kg is not None:
+                        peak_co2 = (
+                            snap.co2_storage_kg
+                            if peak_co2 is None
+                            else max(peak_co2, snap.co2_storage_kg)
+                        )
+                    if snap.o2_storage_kg is not None:
+                        min_o2 = (
+                            snap.o2_storage_kg
+                            if min_o2 is None
+                            else min(min_o2, snap.o2_storage_kg)
+                        )
+                    health = compute_eclss_storage_health(step, snap, thresholds)
+                    last_health = health
+                    log.append("telemetry", {"step": step, "post_ops": True, **snap.to_dict()})
+                    log.append("health_metrics", {**health, "post_ops": True})
 
         summary: Dict[str, Any] = {
             "scenario": self.name,
@@ -296,10 +330,14 @@ class SsosEclssLoopScenario(Scenario):
             summary["team_count"] = team.team_cfg.count
             summary["agent_ids"] = list(team.team_cfg.agent_ids)
             proposals = team.propose_post_run_design(summary)
-            proposals_path = run_dir / "design_proposals.json"
-            write_design_proposals(proposals_path, proposals)
-            summary["design_proposals_path"] = str(proposals_path)
-            summary["design_proposal_count"] = len(proposals.get("changes", []))
+            # L8/B: only persist when there is at least one change so
+            # --apply-proposals never no-ops from an empty document.
+            change_count = len(proposals.get("changes") or [])
+            summary["design_proposal_count"] = change_count
+            if change_count > 0:
+                proposals_path = run_dir / "design_proposals.json"
+                write_design_proposals(proposals_path, proposals)
+                summary["design_proposals_path"] = str(proposals_path)
 
         log.write_summary(summary)
 

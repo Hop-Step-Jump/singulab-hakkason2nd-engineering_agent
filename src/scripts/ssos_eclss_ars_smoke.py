@@ -195,7 +195,7 @@ def send_ars_goal_cli(goal: ArsGoal, timeout_s: float = 120.0) -> Tuple[Optional
     if proc.returncode != 0:
         return None, combined.strip() or f"ros2 action send_goal exited {proc.returncode}"
 
-    success = "Goal finished with status: SUCCEEDED" in combined or "Result:" in combined
+    success = "Goal finished with status: SUCCEEDED" in combined
     cycles = _extract_int(combined, r"cycles_completed:\s*(-?\d+)")
     vents = _extract_int(combined, r"total_vents:\s*(-?\d+)")
     co2_vented = _extract_float(combined, r"total_co2_vented:\s*([-+]?[0-9]*\.?[0-9]+)")

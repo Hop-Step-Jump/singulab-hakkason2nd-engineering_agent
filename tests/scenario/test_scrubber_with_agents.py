@@ -69,7 +69,11 @@ def test_scrubber_degradation_labeled_agents_recover(tmp_path: Path):
     assert "eps_support_steps_remaining" in final_step
     assert summary["provenance_record_count"] >= 1
     assert summary["provenance_path"].endswith("provenance.jsonl")
-    assert len(eps_telemetry) == summary["steps"]
+    eps_steps = {int(r["step"]) for r in eps_telemetry}
+    assert eps_steps == set(range(1, summary["steps"] + 1))
+    assert len(eps_telemetry) >= summary["steps"]
+    assert any(r.get("post_ops") is True for r in telemetry)
+    assert any(r.get("post_ops") is True for r in eps_telemetry)
     assert summary["eps_boost_applied_step"] is not None
     assert summary["min_power_margin_w"] is not None
     assert any(p.get("change_kind") == "request_eps_boost" for p in provenance)

@@ -129,6 +129,8 @@ Python モック（`StationSimulator`）上の CO₂ スクラバー異常シナ
 | `eps_support_w` | EPS 一時支援ワット |
 | `anomaly_flags` | 有効な異常名 |
 
+運用コマンドがあった step では、`"post_ops": true` 付きの 2 行目が追記されうる（L5、`ssos_eclss_loop` と同規約）。ダッシュボード等の読取側は `post_ops`／同 step の最終行を優先し、`summary.json` と揃える。
+
 ### RecoveryCommand — ランタイム
 
 `apply_command()` で適用される一時操作。
@@ -155,6 +157,8 @@ Python モック（`StationSimulator`）上の CO₂ スクラバー異常シナ
 ```json
 {"step": 5, "co2_status": "safe", "power_status": "safe", "overall": "safe"}
 ```
+
+ops 後に health を更新する場合、scrubber `telemetry.jsonl` と同様に `"post_ops": true` の重複行がありうる。
 
 | 指標 | safe | warning | critical |
 | --- | --- | --- | --- |
@@ -258,6 +262,8 @@ Python モック（`StationSimulator`）上の CO₂ スクラバー異常シナ
   "support_steps_remaining": 3
 }
 ```
+
+同一 step で回復コマンド後に EPS を更新する場合、`"post_ops": true` 付き行が追記されうる。
 
 ### summary.json
 
@@ -377,6 +383,8 @@ backend 選択: `scenario.yaml` の `backend.kind`、環境変数 `SSOS_ECLSS_BA
 | `o2_storage_kg` | `/o2_storage` |
 | `product_water_reserve_l` | `/wrs/product_water_reserve` |
 
+運用コマンドがあった step では、`"post_ops": true` 付きの 2 行目が追記されうる（L5）。ダッシュボード等の読取側は `post_ops`／同 step の最終行を優先し、`summary.json` と揃える。
+
 ### EclssOperationalCommand — ランタイム
 
 `SsosEclssLoopTeam.apply_outcome()` → `EclssBackend`
@@ -405,6 +413,8 @@ backend 選択: `scenario.yaml` の `backend.kind`、環境変数 `SSOS_ECLSS_BA
 ```json
 {"step": 3, "co2_status": "warning", "o2_status": "safe", "water_status": "safe", "overall": "warning"}
 ```
+
+ops 後に health を更新する場合、`telemetry.jsonl` と同様に `"post_ops": true` の重複行がありうる。
 
 | 指標 | safe | warning | critical |
 | --- | --- | --- | --- |

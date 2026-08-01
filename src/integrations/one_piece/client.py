@@ -10,6 +10,10 @@ from typing import Any, Dict, List, Optional
 DESIGN_CHANGE_EVENT_KIND = "/eclss/events/design_change"
 RECOVERY_EVENT_KIND = "/eclss/events/recovery_applied"
 OPERATIONAL_EVENT_KIND = "/eclss/events/operational_applied"
+OPERATIONAL_REJECTED_EVENT_KIND = "/eclss/events/operational_rejected"
+OPERATIONAL_EVENT_KINDS = frozenset(
+    {OPERATIONAL_EVENT_KIND, OPERATIONAL_REJECTED_EVENT_KIND}
+)
 EPS_BOOST_COMMAND_KIND = "request_eps_boost"
 
 
@@ -193,7 +197,7 @@ def build_provenance_records(run_dir: Path) -> List[Dict[str, Any]]:
         records.append(record)
 
     for idx, event in enumerate(events):
-        if event.get("kind") != OPERATIONAL_EVENT_KIND:
+        if event.get("kind") not in OPERATIONAL_EVENT_KINDS:
             continue
         command = event.get("command") or {}
         command_kind = command.get("kind")
@@ -209,6 +213,10 @@ def build_provenance_records(run_dir: Path) -> List[Dict[str, Any]]:
             messages=messages,
         )
         result = event.get("result") or {}
+        event_kind = str(event.get("kind", ""))
+        result_success = result.get("success")
+        if result_success is None:
+            result_success = event_kind == OPERATIONAL_EVENT_KIND
 
         record = {
             "record_id": f"{run_id}:operational:{len(records) + 1}",
@@ -221,7 +229,7 @@ def build_provenance_records(run_dir: Path) -> List[Dict[str, Any]]:
             "change_kind": command_kind,
             "payload": command.get("payload", {}),
             "trace": {
-                "event_kind": event.get("kind"),
+                "event_kind": event_kind,
                 "event_index": idx,
                 "message": (msg or {}).get("message"),
                 "reasoning": (msg or {}).get("reasoning"),
@@ -229,7 +237,7 @@ def build_provenance_records(run_dir: Path) -> List[Dict[str, Any]]:
                 or ((msg or {}).get("metadata") or {}).get("decision_source"),
                 "parse_status": (msg or {}).get("parse_status"),
                 "event_message": event.get("message"),
-                "result_success": result.get("success"),
+                "result_success": result_success,
             },
         }
         records.append(record)

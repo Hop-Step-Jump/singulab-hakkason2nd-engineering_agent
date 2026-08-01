@@ -132,6 +132,8 @@ CO₂ scrubber anomaly on Python mock (`StationSimulator`). Frozen.
 | `eps_support_w` | Temporary EPS support watts |
 | `anomaly_flags` | Active anomaly names |
 
+When recovery commands run in a step, a second row may be appended with `"post_ops": true` (L5), mirroring `ssos_eclss_loop`. Readers prefer `post_ops` / the last row for that step so UI matches `summary.json`.
+
 ### RecoveryCommand — runtime
 
 Temporary operation via `apply_command()`.
@@ -158,6 +160,8 @@ Temporary operation via `apply_command()`.
 ```json
 {"step": 5, "co2_status": "safe", "power_status": "safe", "overall": "safe"}
 ```
+
+Same optional `"post_ops": true` duplicate-row rule as scrubber `telemetry.jsonl` when ops refresh health in-step.
 
 | Metric | safe | warning | critical |
 | --- | --- | --- | --- |
@@ -261,6 +265,8 @@ Only with `StationSimulator`.
   "support_steps_remaining": 3
 }
 ```
+
+May also carry `"post_ops": true` when L5 refreshes EPS after recovery commands in the same step.
 
 ### summary.json
 
@@ -380,6 +386,8 @@ Implementation: `environment/ssos/eclss/backend.py`, `eclss/ros2/bridge.py`, `ec
 | `o2_storage_kg` | `/o2_storage` |
 | `product_water_reserve_l` | `/wrs/product_water_reserve` |
 
+When operational commands run in a step, a second row may be appended with `"post_ops": true` (L5). Readers (dashboard) prefer `post_ops` / the last row for that step so UI matches `summary.json`.
+
 ### EclssOperationalCommand — runtime
 
 `SsosEclssLoopTeam.apply_outcome()` → `EclssBackend`
@@ -408,6 +416,8 @@ Thresholds from `scenario.yaml` `thresholds`.
 ```json
 {"step": 3, "co2_status": "warning", "o2_status": "safe", "water_status": "safe", "overall": "warning"}
 ```
+
+Same optional `"post_ops": true` duplicate-row rule as `telemetry.jsonl` when ops refresh health in-step.
 
 | Metric | safe | warning | critical |
 | --- | --- | --- | --- |

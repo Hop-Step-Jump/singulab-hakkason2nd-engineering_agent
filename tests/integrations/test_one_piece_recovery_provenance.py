@@ -45,3 +45,38 @@ def test_build_provenance_includes_ssos_operational_records(tmp_path: Path):
     assert operational, "expected SSOS operational provenance"
     assert operational[0]["change_kind"] == "air_revitalisation"
     assert operational[0]["trace"]["event_kind"] == "/eclss/events/operational_applied"
+
+
+def test_build_provenance_includes_operational_rejected(tmp_path: Path):
+    run_dir = tmp_path / "rejected_run"
+    run_dir.mkdir()
+    (run_dir / "summary.json").write_text(
+        json.dumps({"scenario": "ssos_eclss_loop"}),
+        encoding="utf-8",
+    )
+    (run_dir / "events.jsonl").write_text(
+        json.dumps(
+            {
+                "step": 0,
+                "kind": "/eclss/events/operational_rejected",
+                "command": {
+                    "kind": "air_revitalisation",
+                    "payload": {"initial_co2_mass": 1.8},
+                    "issued_by": "eclss_operator_1",
+                },
+                "result": {"success": False, "summary_message": "ARS failed"},
+                "message": "ARS failed",
+            },
+            ensure_ascii=False,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    records = build_provenance_records(run_dir)
+    operational = [r for r in records if r.get("record_type") == "operational"]
+    assert len(operational) == 1
+    assert operational[0]["change_kind"] == "air_revitalisation"
+    assert operational[0]["trace"]["event_kind"] == "/eclss/events/operational_rejected"
+    assert operational[0]["trace"]["result_success"] is False
+    assert operational[0]["trace"]["event_message"] == "ARS failed"

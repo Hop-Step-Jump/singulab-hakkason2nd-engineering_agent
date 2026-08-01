@@ -64,6 +64,11 @@ _SELF_DIAGNOSIS_BY_SUBSYSTEM = {
 }
 
 
+def _action_goal_succeeded(combined: str) -> bool:
+    """True only when the CLI reports SUCCEEDED (Result: alone is not enough)."""
+    return "Goal finished with status: SUCCEEDED" in combined
+
+
 def _force_cli_telemetry() -> bool:
     return os.environ.get("SSOS_ECLSS_FORCE_CLI_TELEMETRY", "").lower() in {"1", "true", "yes"}
 
@@ -169,7 +174,7 @@ class Ros2EclssBridge:
         )
         if err:
             return ActionResult(success=False, summary_message=err)
-        success = "Goal finished with status: SUCCEEDED" in combined or "Result:" in combined
+        success = _action_goal_succeeded(combined)
         summary = extract_string(combined, r"summary_message:\s*'([^']*)'") or extract_string(
             combined, r'summary_message:\s*"([^"]*)"'
         )
@@ -197,7 +202,7 @@ class Ros2EclssBridge:
         )
         if err:
             return ActionResult(success=False, summary_message=err)
-        success = "Goal finished with status: SUCCEEDED" in combined or "Result:" in combined
+        success = _action_goal_succeeded(combined)
         summary = extract_string(combined, r"summary_message:\s*'([^']*)'") or extract_string(
             combined, r'summary_message:\s*"([^"]*)"'
         )
@@ -221,7 +226,7 @@ class Ros2EclssBridge:
         )
         if err:
             return ActionResult(success=False, summary_message=err)
-        success = "Goal finished with status: SUCCEEDED" in combined or "Result:" in combined
+        success = _action_goal_succeeded(combined)
         summary = extract_string(combined, r"summary_message:\s*'([^']*)'") or extract_string(
             combined, r'summary_message:\s*"([^"]*)"'
         )

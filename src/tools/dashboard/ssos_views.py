@@ -9,6 +9,8 @@ from typing import Any, Dict, List, Optional
 import matplotlib.pyplot as plt
 import streamlit as st
 
+from tools.dashboard.jsonl_rows import select_row_for_step, series_by_step
+
 
 def scenario_name(summary: Dict[str, Any]) -> str:
     return str(summary.get("scenario", ""))
@@ -23,8 +25,8 @@ def render_ssos_health_card(
     health_rows: List[Dict[str, Any]],
     current_step: int,
 ) -> None:
-    current_telemetry = next((r for r in telemetry_rows if int(r["step"]) == current_step), None)
-    current_health = next((r for r in health_rows if int(r["step"]) == current_step), None)
+    current_telemetry = select_row_for_step(telemetry_rows, current_step)
+    current_health = select_row_for_step(health_rows, current_step)
 
     col1, col2, col3, col4, col5, col6 = st.columns(6)
     with col1:
@@ -57,10 +59,11 @@ def render_ssos_storage_plot(
         st.info("No telemetry rows.")
         return
 
-    steps = [int(r["step"]) for r in telemetry_rows]
-    co2 = [r.get("co2_storage_kg") for r in telemetry_rows]
-    o2 = [r.get("o2_storage_kg") for r in telemetry_rows]
-    water = [r.get("product_water_reserve_l") for r in telemetry_rows]
+    plot_rows = series_by_step(telemetry_rows)
+    steps = [int(r["step"]) for r in plot_rows]
+    co2 = [r.get("co2_storage_kg") for r in plot_rows]
+    o2 = [r.get("o2_storage_kg") for r in plot_rows]
+    water = [r.get("product_water_reserve_l") for r in plot_rows]
 
     fig, axes = plt.subplots(3, 1, figsize=(10, 8), sharex=True)
     axes[0].plot(steps, co2, label="CO2 storage (kg)", color="#c44e52")

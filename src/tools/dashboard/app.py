@@ -17,6 +17,7 @@ import streamlit.components.v1 as components
 
 from tools.dashboard import ssos_views
 from environment.scrubber.eclss_ops.telemetry import CO2_RECOVERY_PPM
+from tools.dashboard.jsonl_rows import select_row_for_step, series_by_step
 
 RESULTS_ROOT = Path(__file__).resolve().parents[2] / "experiments" / "results"
 
@@ -65,15 +66,16 @@ def _build_line_plot_figure(
     if not telemetry_rows:
         return None
 
-    steps = [int(r["step"]) for r in telemetry_rows]
-    scrubber_eff = [float(r.get("scrubber_efficiency", 0.0)) for r in telemetry_rows]
-    co2 = [float(r["co2_ppm"]) for r in telemetry_rows]
-    power = [float(r["power_margin_w"]) for r in telemetry_rows]
-    eps_support = [float(r.get("eps_support_w", 0.0)) for r in telemetry_rows]
+    plot_rows = series_by_step(telemetry_rows)
+    steps = [int(r["step"]) for r in plot_rows]
+    scrubber_eff = [float(r.get("scrubber_efficiency", 0.0)) for r in plot_rows]
+    co2 = [float(r["co2_ppm"]) for r in plot_rows]
+    power = [float(r["power_margin_w"]) for r in plot_rows]
+    eps_support = [float(r.get("eps_support_w", 0.0)) for r in plot_rows]
     anomaly_start = next(
         (
             int(r["step"])
-            for r in telemetry_rows
+            for r in plot_rows
             if "scrubber_degradation" in r.get("anomaly_flags", [])
         ),
         None,
@@ -120,10 +122,11 @@ def _build_line_plot_figure(
     axes[3].grid(alpha=0.2)
 
     if eps_rows:
-        eps_steps = [int(r["step"]) for r in eps_rows]
-        solar_v = [float(r.get("solar_voltage_v") or 0.0) for r in eps_rows]
-        bcdu_y = [_BCDU_MODE_Y.get(str(r.get("bcdu_mode", "idle")), 0) for r in eps_rows]
-        bcdu_support = [float(r.get("support_w", 0.0)) for r in eps_rows]
+        eps_plot_rows = series_by_step(eps_rows)
+        eps_steps = [int(r["step"]) for r in eps_plot_rows]
+        solar_v = [float(r.get("solar_voltage_v") or 0.0) for r in eps_plot_rows]
+        bcdu_y = [_BCDU_MODE_Y.get(str(r.get("bcdu_mode", "idle")), 0) for r in eps_plot_rows]
+        bcdu_support = [float(r.get("support_w", 0.0)) for r in eps_plot_rows]
 
         axes[4].plot(eps_steps, solar_v, color="#e377c2", linewidth=2)
         _maybe_highlight(axes[4])
@@ -1213,9 +1216,9 @@ def _render_health_card(
     eps_rows: List[Dict[str, Any]],
     current_step: int,
 ) -> None:
-    current_telemetry = next((r for r in telemetry_rows if int(r["step"]) == current_step), None)
-    current_health = next((r for r in health_rows if int(r["step"]) == current_step), None)
-    current_eps = next((r for r in eps_rows if int(r["step"]) == current_step), None)
+    current_telemetry = select_row_for_step(telemetry_rows, current_step)
+    current_health = select_row_for_step(health_rows, current_step)
+    current_eps = select_row_for_step(eps_rows, current_step)
 
     col1, col2, col3, col4, col5, col6 = st.columns(6)
     with col1:

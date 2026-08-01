@@ -57,7 +57,7 @@ def test_ssos_eclss_loop_baseline_runs(tmp_path: Path):
     assert summary["message_count"] == 0
     assert summary.get("ars_invoked_step") is None
     assert (run_dir / "provenance.jsonl").exists()
-    assert (run_dir / "design_state.jsonl").exists() is False
+    assert (run_dir / "design_state.jsonl").exists()
     assert not (run_dir / "design_proposals.json").exists()
 
     co2_series = [row["co2_storage_kg"] for row in telemetry]
@@ -321,4 +321,31 @@ def test_ssos_eclss_loop_llm_agents_invoke_ars(tmp_path: Path, monkeypatch):
     assert design_proposals.get("decision_source") == "llm"
     assert design_proposals.get("design_domain") == "ssos_graph"
     assert any(c.get("change_kind") == "action_profile" for c in design_proposals.get("changes", []))
+
+
+def test_ssos_eclss_loop_skips_empty_design_proposals_file(tmp_path: Path, monkeypatch):
+    """L8/B: do not write design_proposals.json when changes is empty."""
+    from scenario.agents.ssos_eclss_loop_team import SsosEclssLoopTeam
+
+    monkeypatch.setattr(
+        SsosEclssLoopTeam,
+        "propose_post_run_design",
+        lambda self, summary: {
+            "design_domain": "ssos_graph",
+            "proposed_by": "op_1",
+            "decision_source": "rule",
+            "message": "",
+            "changes": [],
+        },
+    )
+    run_dir = run_scenario(
+        "ssos_eclss_loop",
+        output_dir=tmp_path / "empty_proposals",
+        overrides={"agents": {"mode": "labeled_rule_base"}},
+        recreate_output=True,
+    )
+    summary = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary.get("design_proposal_count") == 0
+    assert "design_proposals_path" not in summary
+    assert not (run_dir / "design_proposals.json").exists()
 

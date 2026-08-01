@@ -109,6 +109,7 @@ class SsosEclssLoopTeam(Team):
             proposed_by=rep,
             decision_source="rule",
             policy=self.policy,
+            summary=summary,
             baseline_graph=baseline_graph or None,
         )
 
@@ -152,8 +153,6 @@ class SsosEclssLoopTeam(Team):
     def _run_step_labeled(self, obs: EclssLoopObservation) -> StepEclssOutcome:
         outcome = StepEclssOutcome()
         rep = self.team_cfg.action_rep_id(obs.step)
-        agent_ids = self.team_cfg.agent_ids
-        n = len(agent_ids)
         co2_high = float(self.policy.get("co2_storage_high_kg", 1.5))
         co2_critical = float(self.policy.get("co2_storage_critical_kg", 2.2))
         o2_low = float(self.policy.get("o2_storage_low_kg", 0.45))
@@ -161,7 +160,7 @@ class SsosEclssLoopTeam(Team):
         o2 = obs.telemetry.o2_storage_kg
 
         if co2 is not None and co2 >= co2_high and not self.state.alert_sent:
-            commenter = agent_ids[obs.step % n]
+            commenter = rep
             self.state.alert_sent = True
             band = "critical" if co2 >= co2_critical else "high"
             outcome.messages.append(
@@ -625,7 +624,7 @@ class SsosEclssLoopTeam(Team):
                 number = float(value)
             except (TypeError, ValueError):
                 return None
-            # D5: reject NaN/Inf/negative quantities from LLM payloads.
+            # L7/D5: reject NaN/Inf/negative quantities from LLM payloads.
             if not math.isfinite(number) or number < 0.0:
                 return None
             normalized[key] = number
@@ -686,8 +685,14 @@ class SsosEclssLoopTeam(Team):
                 "message": f"unsupported command kind: {kind}",
             }
 
+        success = bool(getattr(result, "success", False))
+        event_kind = (
+            "/eclss/events/operational_applied"
+            if success
+            else "/eclss/events/operational_rejected"
+        )
         return {
-            "kind": "/eclss/events/operational_applied",
+            "kind": event_kind,
             "command": cmd.to_dict(),
             "result": result.to_dict(),
             "message": getattr(result, "summary_message", None) or getattr(result, "message", ""),

@@ -157,6 +157,30 @@ class ScrubberDegradationScenario(Scenario):
                     message_count += 1
                 _log_sim_events(log, sim, snap.step, logged_event_ids)
 
+                # L5: refresh actuator / EPS fields after ops (same step, no physics advance).
+                # Append post_ops rows so JSONL matches summary / dashboard (ssos L5 parity).
+                if outcome.commands and last_snap is not None:
+                    from dataclasses import replace
+
+                    plant = station.eclss if station is not None else sim
+                    updates = {
+                        "fan_speed": getattr(plant, "fan_speed", last_snap.fan_speed),
+                        "bypass_enabled": getattr(plant, "bypass_enabled", last_snap.bypass_enabled),
+                        "load_reduced": getattr(plant, "load_reduced", last_snap.load_reduced),
+                    }
+                    if station is not None:
+                        updates["eps_support_w"] = round(station.eps.support_w, 2)
+                        updates["eps_support_steps_remaining"] = station.eps.support_steps_remaining
+                    last_snap = replace(last_snap, **updates)
+                    last_health = compute_health_metrics(last_snap)
+                    log.append("telemetry", {"post_ops": True, **last_snap.to_dict()})
+                    log.append("health_metrics", {"post_ops": True, **last_health.to_dict()})
+                    if station is not None:
+                        log.append(
+                            "eps_telemetry",
+                            {"post_ops": True, **station.eps_telemetry_dict(last_snap.step)},
+                        )
+
         for event in sim.get_events():
             if event.get("kind") != EVENT_RECOVERY:
                 continue

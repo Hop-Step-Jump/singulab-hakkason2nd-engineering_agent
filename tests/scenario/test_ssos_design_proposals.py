@@ -77,6 +77,7 @@ def test_build_design_proposals_from_policy():
         "ars_goal": {"initial_co2_mass": 1.8},
         "ogs_goal": {"input_water_mass": 0.01},
     }
+    # Without summary stress, still emit a non-no-op ARS bump (L8).
     doc = build_design_proposals_from_run(
         proposed_by="eclss_operator_1",
         decision_source="rule",
@@ -84,9 +85,63 @@ def test_build_design_proposals_from_policy():
     )
     assert doc["design_domain"] == DESIGN_DOMAIN
     assert doc["proposed_by"] == "eclss_operator_1"
-    kinds = {c["change_kind"] for c in doc["changes"]}
-    assert kinds == {"action_profile", "service_config", "set_parameter"}
+    assert doc["changes"]
+    assert any(c.get("change_kind") == "action_profile" for c in doc["changes"])
+    ars = next(c for c in doc["changes"] if c["change_kind"] == "action_profile")
+    assert ars["payload"]["fields"]["initial_co2_mass"] == pytest.approx(1.98)
     assert validate_design_proposals(doc) == []
+
+
+def test_build_design_proposals_from_stressed_summary():
+    policy = {
+        "co2_storage_high_kg": 1.5,
+        "o2_storage_low_kg": 0.45,
+        "request_co2_amount": 0.025,
+        "request_co2_before_ogs": True,
+        "ars_goal": {"initial_co2_mass": 1.8},
+        "ogs_goal": {"input_water_mass": 0.01},
+    }
+    doc = build_design_proposals_from_run(
+        proposed_by="eclss_operator_1",
+        decision_source="rule",
+        policy=policy,
+        summary={
+            "final_health": {"co2_status": "warning", "o2_status": "warning"},
+            "final_co2_storage_kg": 1.7,
+            "min_o2_storage_kg": 0.4,
+        },
+    )
+    kinds = {c["change_kind"] for c in doc["changes"]}
+    assert "action_profile" in kinds
+    assert "set_parameter" in kinds
+    assert "service_config" in kinds
+
+
+def test_build_design_proposals_fallback_without_goals_uses_threshold():
+    """L8/A: missing ars/ogs goals still yields a non-no-op threshold bump."""
+    doc = build_design_proposals_from_run(
+        proposed_by="eclss_operator_1",
+        decision_source="rule",
+        policy={"co2_storage_high_kg": 1.5, "o2_storage_low_kg": 0.45},
+    )
+    assert doc["changes"]
+    assert all(c["change_kind"] == "set_parameter" for c in doc["changes"])
+    values = {c["payload"]["target"]: c["payload"]["value"] for c in doc["changes"]}
+    assert values["agents.policy.co2_storage_high_kg"] == pytest.approx(1.35)
+    assert values["thresholds.co2_storage_high_kg"] == pytest.approx(1.35)
+
+
+def test_build_design_proposals_fallback_empty_policy_uses_default_threshold():
+    """Even with empty policy, labeled builder uses default CO₂ high band."""
+    doc = build_design_proposals_from_run(
+        proposed_by="rep",
+        decision_source="rule",
+        policy={},
+    )
+    assert doc["changes"]
+    assert any(
+        c["payload"]["target"] == "thresholds.co2_storage_high_kg" for c in doc["changes"]
+    )
 
 
 def test_write_rejects_scrubber_change_kind(tmp_path):
@@ -108,7 +163,7 @@ def test_round_trip_via_json_file(tmp_path):
     write_design_proposals(path, proposals)
     loaded = json.loads(path.read_text(encoding="utf-8"))
     merged = apply_design_proposals({"agents": {"policy": {}}}, loaded)
-    assert merged["agents"]["policy"]["ogs_goal"]["input_water_mass"] == 9.0
+    assert merged["agents"]["policy"]["ogs_goal"]["input_water_mass"] == pytest.approx(9.9)
 
 
 def test_apply_action_profile_rejects_unknown_fields():

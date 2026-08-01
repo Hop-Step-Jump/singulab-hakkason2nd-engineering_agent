@@ -211,7 +211,7 @@ ROS launch-file remap (Phase 8): [backlog BL-003](memo/backlog.md#bl-003).
 | IDs | `eclss_operator_1` … `eclss_operator_N` (default 3) |
 | deliberation | llm: one round for all. labeled: operational decision messages |
 | action rep | `eclss_operator_{(step-1) % N}` |
-| post-run rep | Representative at final step outputs `design_proposals.json` |
+| post-run rep | Representative at final step outputs `design_proposals.json` when `changes` is non-empty |
 
 `SsosEclssLoopTeam` extends the `Team` ABC. Signatures: `run_step(backend, obs)` / `apply_outcome(backend, outcome)`.
 
@@ -221,7 +221,7 @@ ROS launch-file remap (Phase 8): [backlog BL-003](memo/backlog.md#bl-003).
 | --- | --- | --- |
 | Decisions | `thresholds` + `policy` profile | Persona + storage telemetry + discussion |
 | Reproducibility | High | Model-dependent |
-| Post-run proposals | Rule-based `ssos_graph` | LLM generates `changes` |
+| Post-run proposals | Rule-based `ssos_graph` (non-empty when written; L8 fallback bumps goals/thresholds) | LLM generates `changes` (file omitted if empty) |
 | provenance | `operational_applied` → `record_type: operational` | Same |
 
 ---
@@ -275,7 +275,7 @@ python -m scenario.ssos_eclss_loop.scenario_run --backend mock --agents-mode llm
 | `messages.jsonl` | `operational_command`, deliberation, reasoning |
 | `events.jsonl` | `operational_applied` / `operational_rejected` |
 | `design_state.jsonl` | `ssos_graph` snapshot each step (includes rewires) |
-| `design_proposals.json` | Post-run permanent `ssos_graph` proposals |
+| `design_proposals.json` | Post-run permanent `ssos_graph` proposals (written only when `changes` is non-empty) |
 | `summary.json` | Peak CO₂, operational count, backend kind, etc. |
 | `provenance.jsonl` | Operational records (`record_type: operational`) |
 

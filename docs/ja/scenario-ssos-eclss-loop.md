@@ -210,7 +210,7 @@ ROS launch ファイル側の remap（Phase 8）は [backlog BL-003](memo/backlo
 | ID | `eclss_operator_1` … `eclss_operator_N`（デフォルト 3） |
 | deliberation | llm: 全員 1 ラウンド。labeled: 運用判断メッセージ |
 | action rep | `eclss_operator_{(step-1) % N}` |
-| post-run rep | 最終 step の代表が `design_proposals.json` |
+| post-run rep | 最終 step の代表が `design_proposals.json`（`changes` 非空のときのみ） |
 
 `SsosEclssLoopTeam` は `Team` ABC を継承。`run_step(backend, obs)` / `apply_outcome(backend, outcome)` シグネチャ。
 
@@ -220,7 +220,7 @@ ROS launch ファイル側の remap（Phase 8）は [backlog BL-003](memo/backlo
 | --- | --- | --- |
 | 判断 | `thresholds` + `policy` プロファイル | Persona + ストレージテレメトリ + 議論 |
 | 再現性 | 高い | モデル依存 |
-| 事後提案 | ルールベース `ssos_graph` | LLM が `changes` 生成 |
+| 事後提案 | ルールベース `ssos_graph`（書くときは非空。L8 で goal/閾値フォールバック） | LLM が `changes` 生成（空ならファイルなし） |
 | provenance | `operational_applied` → `record_type: operational` | 同上 |
 
 ---
@@ -274,7 +274,7 @@ python -m scenario.ssos_eclss_loop.scenario_run --backend mock --agents-mode llm
 | `messages.jsonl` | `operational_command`、deliberation、reasoning |
 | `events.jsonl` | `operational_applied` / `operational_rejected` |
 | `design_state.jsonl` | 各 step の `ssos_graph` スナップショット（rewires 含む） |
-| `design_proposals.json` | 事後の `ssos_graph` 恒久案 |
+| `design_proposals.json` | 事後の `ssos_graph` 恒久案（`changes` 非空のときのみ書込） |
 | `summary.json` | peak CO₂、operational 回数、backend 種別など |
 | `provenance.jsonl` | 運用レコード（`record_type: operational`） |
 

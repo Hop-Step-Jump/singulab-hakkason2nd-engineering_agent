@@ -23,6 +23,16 @@ def test_health_unknown_when_telemetry_missing():
     assert health["overall"] == HealthStatus.UNKNOWN.value
 
 
+def test_health_unknown_for_nan_telemetry():
+    import math
+
+    snap = EclssTelemetrySnapshot(co2_storage_kg=math.nan, o2_storage_kg=math.nan)
+    health = compute_eclss_storage_health(0, snap, {"co2_storage_high_kg": 1.5, "o2_storage_low_kg": 0.45})
+    assert health["co2_status"] == HealthStatus.UNKNOWN.value
+    assert health["o2_status"] == HealthStatus.UNKNOWN.value
+    assert health["overall"] == HealthStatus.UNKNOWN.value
+
+
 def test_telemetry_snapshot_to_dict_omits_nulls():
     payload = EclssTelemetrySnapshot(co2_storage_kg=10.0).to_dict()
     assert payload == {"co2_storage_kg": 10.0}

@@ -130,7 +130,7 @@ class ScrubberDegradationTeam(Team):
         n = len(agent_ids)
 
         if obs.telemetry.co2_ppm >= recovery_ppm and not self.state.alert_sent:
-            commenter = agent_ids[obs.step % n]
+            commenter = rep
             self.state.alert_sent = True
             outcome.messages.append(
                 AgentMessage(
