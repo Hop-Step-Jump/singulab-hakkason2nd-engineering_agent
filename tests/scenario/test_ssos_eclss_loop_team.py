@@ -160,6 +160,41 @@ def test_team_escalates_ars_on_critical_band():
     assert backend.last_ars_goal.initial_co2_mass == pytest.approx(2.7)
 
 
+def test_team_keeps_ars_while_critical_after_partial_recovery():
+    """Critical ARS must not stall when CO₂ drops but stays in the critical band."""
+    cfg = _team_config()
+    cfg["policy"]["co2_storage_high_kg"] = 1.5
+    cfg["policy"]["co2_storage_critical_kg"] = 2.2
+    team = SsosEclssLoopTeam(cfg)
+    backend = LoopMockEclssBackend(
+        {
+            "simulation": {"initial_co2_storage_kg": 2.5, "initial_o2_storage_kg": 0.5},
+            # Partial drop: leave storage above critical (2.2) after first ARS.
+            "mock_dynamics": {
+                "ars_co2_reduction_kg": 0.2,
+                "ars_reference_co2_mass_kg": 2.7,
+                "co2_growth_kg_per_step": 0.0,
+            },
+        }
+    )
+    snap0 = backend.poll_telemetry()
+    obs0 = EclssLoopObservation(step=0, telemetry=snap0, health={"overall": "critical"})
+    outcome0 = team.run_step(backend, obs0)
+    assert any(c.kind == "air_revitalisation" for c in outcome0.commands)
+    team.apply_outcome(backend, outcome0)
+    assert team.state.ars_critical_escalated is True
+
+    backend.advance_step()
+    snap1 = backend.poll_telemetry()
+    assert snap1.co2_storage_kg < 2.5
+    assert snap1.co2_storage_kg >= 2.2
+    obs1 = EclssLoopObservation(step=1, telemetry=snap1, health={"overall": "critical"})
+    outcome1 = team.run_step(backend, obs1)
+    assert any(
+        c.kind == "air_revitalisation" for c in outcome1.commands
+    ), "must keep dispatching ARS while still in critical after partial recovery"
+
+
 def test_loop_mock_request_o2_withdraws_plant_storage():
     backend = LoopMockEclssBackend(
         {

@@ -237,11 +237,12 @@ def build_design_proposals_from_run(
     L8 (labeled_rule_base): prefer outcome-driven changes that differ from the
     run-time policy so ``--apply-proposals`` can change the next simulation.
 
-    Fallback order when stress yields nothing: bump ``ars_goal``, else
-    ``ogs_goal``, else CO₂/O₂ thresholds (policy or defaults), else
-    ``request_co2`` service_config. Callers should skip writing
-    ``design_proposals.json`` when ``changes`` is still empty (e.g. LLM
-    parse failure); see ``scenario_run``.
+    Fallback order when stress yields nothing: bump ``ars_goal`` only when
+    the bump is a positive increase, else ``ogs_goal`` (same rule), else
+    CO₂/O₂ thresholds (policy or defaults), else ``request_co2``
+    service_config. Callers should skip writing ``design_proposals.json``
+    when ``changes`` is still empty (e.g. LLM parse failure); see
+    ``scenario_run``.
     """
     summary = summary or {}
     changes: List[Dict[str, Any]] = []
@@ -312,18 +313,23 @@ def build_design_proposals_from_run(
                         "payload": {
                             "service": "request_co2",
                             "amount": proposed_amt,
-                            "before_ogs": bool(policy.get("request_co2_before_ogs", True)),
+                            # Match agents.yaml / labeled default (false): absent
+                            # must not opt-in to pre-OGS request_co2 (LoopMock double debit).
+                            "before_ogs": bool(
+                                policy.get("request_co2_before_ogs", False)
+                            ),
                         },
                     }
                 )
 
     # L8 fallback: keep labeled proposals non-empty / non-no-op when possible.
     # Empty ``changes`` is still allowed for callers that skip the write (LLM).
+    # Only accept a fallback that yields a positive bump; otherwise fall through.
     if not changes:
         if ars_goal:
             base_mass = float(ars_goal.get("initial_co2_mass", 1.8))
             proposed_mass = round(base_mass * 1.1, 6)
-            if proposed_mass != base_mass:
+            if proposed_mass > base_mass:
                 changes.append(
                     {
                         "change_kind": "action_profile",
@@ -334,10 +340,10 @@ def build_design_proposals_from_run(
                         },
                     }
                 )
-        elif ogs_goal:
+        if not changes and ogs_goal:
             base_water = float(ogs_goal.get("input_water_mass", 0.015))
             proposed_water = round(base_water * 1.1, 6)
-            if proposed_water != base_water:
+            if proposed_water > base_water:
                 changes.append(
                     {
                         "change_kind": "action_profile",
@@ -348,7 +354,7 @@ def build_design_proposals_from_run(
                         },
                     }
                 )
-        else:
+        if not changes:
             proposed_high = round(co2_high * 0.9, 6)
             if proposed_high > 0.0 and proposed_high != co2_high:
                 _append_threshold_bump(
@@ -369,7 +375,7 @@ def build_design_proposals_from_run(
                 elif "request_co2_amount" in policy:
                     base_amt = float(policy.get("request_co2_amount", 0.025))
                     proposed_amt = round(base_amt * 1.1, 6)
-                    if proposed_amt != base_amt:
+                    if proposed_amt > base_amt:
                         changes.append(
                             {
                                 "change_kind": "service_config",
@@ -377,7 +383,7 @@ def build_design_proposals_from_run(
                                     "service": "request_co2",
                                     "amount": proposed_amt,
                                     "before_ogs": bool(
-                                        policy.get("request_co2_before_ogs", True)
+                                        policy.get("request_co2_before_ogs", False)
                                     ),
                                 },
                             }

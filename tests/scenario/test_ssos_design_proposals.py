@@ -131,6 +131,68 @@ def test_build_design_proposals_fallback_without_goals_uses_threshold():
     assert values["thresholds.co2_storage_high_kg"] == pytest.approx(1.35)
 
 
+def test_build_design_proposals_defaults_before_ogs_false_when_absent():
+    """Absent request_co2_before_ogs must not embed before_ogs: true in proposals."""
+    policy = {
+        "co2_storage_high_kg": 1.5,
+        "o2_storage_low_kg": 0.45,
+        "request_co2_amount": 0.025,
+        "ogs_goal": {"input_water_mass": 0.01},
+    }
+    doc = build_design_proposals_from_run(
+        proposed_by="eclss_operator_1",
+        decision_source="rule",
+        policy=policy,
+        summary={
+            "final_health": {"o2_status": "warning"},
+            "min_o2_storage_kg": 0.4,
+        },
+    )
+    service = next(c for c in doc["changes"] if c["change_kind"] == "service_config")
+    assert service["payload"]["before_ogs"] is False
+
+
+def test_build_design_proposals_ars_zero_mass_falls_through_to_ogs():
+    """ARS fallback with non-positive bump must not block OGS / later fallbacks."""
+    doc = build_design_proposals_from_run(
+        proposed_by="eclss_operator_1",
+        decision_source="rule",
+        policy={
+            "co2_storage_high_kg": 1.5,
+            "o2_storage_low_kg": 0.45,
+            "ars_goal": {"initial_co2_mass": 0.0},
+            "ogs_goal": {"input_water_mass": 0.01},
+        },
+    )
+    assert doc["changes"]
+    ogs = next(c for c in doc["changes"] if c["change_kind"] == "action_profile")
+    assert ogs["payload"]["subsystem"] == "ogs"
+    assert ogs["payload"]["fields"]["input_water_mass"] == pytest.approx(0.011)
+
+
+def test_build_design_proposals_ars_tiny_mass_falls_through():
+    """Rounded-to-zero ARS bump must fall through instead of writing a no-op profile."""
+    doc = build_design_proposals_from_run(
+        proposed_by="eclss_operator_1",
+        decision_source="rule",
+        policy={
+            "co2_storage_high_kg": 1.5,
+            "o2_storage_low_kg": 0.45,
+            "ars_goal": {"initial_co2_mass": 1e-7},
+            "ogs_goal": {"input_water_mass": 0.01},
+        },
+    )
+    assert doc["changes"]
+    profiles = [c for c in doc["changes"] if c["change_kind"] == "action_profile"]
+    assert profiles
+    assert profiles[0]["payload"]["subsystem"] == "ogs"
+    assert all(
+        c["payload"]["fields"].get("initial_co2_mass", 1.0) > 0.0
+        for c in profiles
+        if c["payload"]["subsystem"] == "ars"
+    )
+
+
 def test_build_design_proposals_fallback_empty_policy_uses_default_threshold():
     """Even with empty policy, labeled builder uses default CO₂ high band."""
     doc = build_design_proposals_from_run(

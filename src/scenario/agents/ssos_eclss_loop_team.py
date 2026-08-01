@@ -233,9 +233,11 @@ class SsosEclssLoopTeam(Team):
         commands: List[EclssOperationalCommand] = []
 
         in_critical = co2 is not None and co2 >= co2_critical
+        # High/warning band is one-shot (ars_invoked). Critical band keeps
+        # recovering until CO₂ leaves critical — otherwise a partial ARS drop
+        # that stays >= critical stalls with both latches set.
         need_ars = co2 is not None and co2 >= co2_high and (
-            not self.state.ars_invoked
-            or (in_critical and not self.state.ars_critical_escalated)
+            not self.state.ars_invoked or in_critical
         )
         if need_ars:
             ars_payload = dict(self.policy.get("ars_goal", {}))
