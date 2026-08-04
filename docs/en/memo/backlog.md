@@ -189,16 +189,16 @@ Phase 7a covers **client-side remap in `Ros2EclssBridge` only**. Without `--ros-
 
 CLI v3 focuses on **host one-command runs and results mounts**. The items below belong to the simulation/visualization layer.
 
-### P1 — Plant initial state (CO2=500kg)
+### P1 — Plant initial state (ros2 vs mock)
 
 | Item | Description |
 | --- | --- |
-| `scenario.yaml` | `simulation.initial_co2_storage_kg: 500` (mock; currently 1500) |
+| `scenario.yaml` | Mock defaults use teaching-scale kg (`initial_co2_storage_kg: 1.5`; see `thresholds`) |
 | ros2 step 0 | Record `/co2_storage` after headless restart as `summary.plant_initial_co2_storage_kg` |
-| Validation | Fail fast if outside tolerance vs target 500 (point to SSOS launch params) |
-| SSOS side | Investigate launch params if headless default ≠ 500kg |
+| Validation | Fail fast if outside tolerance vs scenario target (point to SSOS launch params) |
+| SSOS side | Investigate launch params if headless default disagrees with expected plant state |
 
-**Intent**: Run-to-run reset is handled by CLI (headless restart). Target CO2 level and validation are scenario/plant contract.
+**Intent**: Run-to-run reset is handled by CLI (headless restart). Align ros2 plant telemetry (grams on wire) with scenario thresholds via bridge conversion — not tonne-scale mock literals.
 
 ### P2 — Streamlit dashboard (rich SSOS views)
 

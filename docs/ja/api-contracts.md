@@ -370,8 +370,8 @@ backend 選択: `scenario.yaml` の `backend.kind`、環境変数 `SSOS_ECLSS_BA
 ```json
 {
   "step": 3,
-  "co2_storage_kg": 1680.0,
-  "o2_storage_kg": 465.0,
+  "co2_storage_kg": 1.68,
+  "o2_storage_kg": 0.465,
   "product_water_reserve_l": 100.0,
   "ars_failure_enabled": false
 }
@@ -392,7 +392,7 @@ backend 選択: `scenario.yaml` の `backend.kind`、環境変数 `SSOS_ECLSS_BA
 ```json
 {
   "kind": "air_revitalisation",
-  "payload": {"initial_co2_mass": 1800.0, "initial_moisture_content": 25.0},
+  "payload": {"initial_co2_mass": 1.8, "initial_moisture_content": 25.0},
   "issued_by": "eclss_operator_1"
 }
 ```
@@ -418,8 +418,8 @@ ops 後に health を更新する場合、`telemetry.jsonl` と同様に `"post_
 
 | 指標 | safe | warning | critical |
 | --- | --- | --- | --- |
-| CO₂ ストレージ (kg) | < 1500（high） | 1500 〜 2200 未満 | ≥ 2200 |
-| O₂ ストレージ (kg) | > 450（low） | 337.5 〜 450 | ≤ 337.5 |
+| CO₂ ストレージ (kg) | < 1.5（high） | 1.5 〜 2.2 未満 | ≥ 2.2 |
+| O₂ ストレージ (kg) | > 0.45（low） | 0.3375 〜 0.45 | ≤ 0.3375 |
 | 製品水 (L) | > 50（low） | 25 〜 50 | ≤ 25 |
 
 `thresholds.co2_storage_high_kg` 等は**運用トリガー**。ヘルス区分とは別概念。
@@ -479,7 +479,7 @@ ops 後に health を更新する場合、`telemetry.jsonl` と同様に `"post_
 {
   "step": 2,
   "kind": "/eclss/events/operational_applied",
-  "command": {"kind": "air_revitalisation", "issued_by": "eclss_operator_1", "payload": {"initial_co2_mass": 1800.0}},
+  "command": {"kind": "air_revitalisation", "issued_by": "eclss_operator_1", "payload": {"initial_co2_mass": 1.8}},
   "result": {"success": true},
   "message": "ARS goal dispatched"
 }
@@ -508,9 +508,9 @@ ops 後に health を更新する場合、`telemetry.jsonl` と同様に `"post_
   "backend": "ros2",
   "agents_mode": "labeled_rule_base",
   "steps": 8,
-  "peak_co2_storage_kg": 1680.0,
-  "final_co2_storage_kg": 1330.0,
-  "final_o2_storage_kg": 465.0,
+  "peak_co2_storage_kg": 1.68,
+  "final_co2_storage_kg": 1.33,
+  "final_o2_storage_kg": 0.465,
   "operational_command_count": 3,
   "ogs_invoked_step": 2,
   "final_health": {"co2_status": "safe", "o2_status": "warning", "overall": "warning"},
@@ -542,7 +542,7 @@ ops 後に health を更新する場合、`telemetry.jsonl` と同様に `"post_
   "scenario": "ssos_eclss_loop",
   "change_kind": "air_revitalisation",
   "actor": "eclss_operator_1",
-  "payload": {"initial_co2_mass": 1800.0},
+  "payload": {"initial_co2_mass": 1.8},
   "trace": {"event_kind": "/eclss/events/operational_applied", "result_success": true}
 }
 ```

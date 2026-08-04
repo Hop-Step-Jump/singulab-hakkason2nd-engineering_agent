@@ -41,14 +41,22 @@ Constant: `LAUNCH_HEADLESS_ECLSS = "space_station/eclss.launch.py"`
 
 ### Telemetry Topics
 
-| Topic | Type | Field |
-| --- | --- | --- |
-| `/co2_storage` | `std_msgs/Float64` | CO₂ storage [kg] |
-| `/o2_storage` | `std_msgs/Float64` | O₂ storage [kg] |
-| `/wrs/product_water_reserve` | `std_msgs/Float64` | Potable water reserve [L] |
-| `/ars/diagnostics` | diagnostic | ARS diagnostics |
-| `/ogs/diagnostics` | diagnostic | OGS diagnostics |
-| `/wrs/diagnostics` | diagnostic | WRS diagnostics |
+| Topic | Type | SSOS wire unit | `EclssTelemetrySnapshot` |
+| --- | --- | --- | --- |
+| `/co2_storage` | `std_msgs/Float64` | grams | `co2_storage_kg` |
+| `/o2_storage` | `std_msgs/Float64` | grams | `o2_storage_kg` |
+| `/wrs/product_water_reserve` | `std_msgs/Float64` | liters | `product_water_reserve_l` |
+| `/ars/diagnostics` | diagnostic | — | ARS diagnostics |
+| `/ogs/diagnostics` | diagnostic | — | OGS diagnostics |
+| `/wrs/diagnostics` | diagnostic | — | WRS diagnostics |
+
+### Units and conversions
+
+Inside **engineering_agents**, CO₂/O₂ storage, service amounts, and goal mass fields (`ArsGoal.initial_co2_mass`, `OgsGoal.input_water_mass`, etc.) use **kilograms**; water volumes use **liters**. `Ros2EclssBridge` converts **grams ↔ kg** at the ROS boundary (`g_to_kg` / `kg_to_g` on topic read and goal/service send).
+
+Mock electrolysis uses `o2_generated_kg()` (0.89 kg O₂ per kg H₂O × `o2_efficiency`, default 0.95) — stoichiometric yield, not a unit conversion.
+
+**Raw `ros2` CLI** examples below use SSOS-native **grams** in goal/service YAML; Python `ArsGoal` / `OgsGoal` dataclasses use **kg** (e.g. `1.8` kg vs `{initial_co2_mass: 1800.0}` on the wire).
 
 ### Fault injection (Self Diagnosis)
 
@@ -112,7 +120,7 @@ classDiagram
 
 ```python
 ArsGoal(
-    initial_co2_mass=1800.0,
+    initial_co2_mass=1.8,
     initial_moisture_content=25.0,
     initial_contaminants=5.0,
 )
@@ -122,7 +130,7 @@ ArsGoal(
 
 ```python
 OgsGoal(
-    input_water_mass=15.0,
+    input_water_mass=0.015,
     iodine_concentration=2.0,
 )
 ```
@@ -176,7 +184,7 @@ sequenceDiagram
   BE->>SSOS: ros2 action send_goal air_revitalisation
   SSOS-->>BE: SUCCEEDED
 
-  Agent->>BE: request_co2(25.0)
+  Agent->>BE: request_co2(0.025)
   BE->>SSOS: ros2 service call /ars/request_co2
   SSOS-->>BE: success
 

@@ -40,14 +40,22 @@ SSOS の **ARS**（大気再生）、**OGS**（酸素生成）、**WRS**（水�
 
 ### Telemetry Topics
 
-| トピック | 型 | フィールド |
-| --- | --- | --- |
-| `/co2_storage` | `std_msgs/Float64` | CO₂ 貯留 [kg] |
-| `/o2_storage` | `std_msgs/Float64` | O₂ 貯留 [kg] |
-| `/wrs/product_water_reserve` | `std_msgs/Float64` | 飲料水貯留 [L] |
-| `/ars/diagnostics` | diagnostic | ARS 診断 |
-| `/ogs/diagnostics` | diagnostic | OGS 診断 |
-| `/wrs/diagnostics` | diagnostic | WRS 診断 |
+| Topic | Type | SSOS wire unit | `EclssTelemetrySnapshot` |
+| --- | --- | --- | --- |
+| `/co2_storage` | `std_msgs/Float64` | grams | `co2_storage_kg` |
+| `/o2_storage` | `std_msgs/Float64` | grams | `o2_storage_kg` |
+| `/wrs/product_water_reserve` | `std_msgs/Float64` | liters | `product_water_reserve_l` |
+| `/ars/diagnostics` | diagnostic | — | ARS diagnostics |
+| `/ogs/diagnostics` | diagnostic | — | OGS diagnostics |
+| `/wrs/diagnostics` | diagnostic | — | WRS diagnostics |
+
+### Units and conversions
+
+**engineering_agents** 内部では CO₂/O₂ 貯留・サービス量・ゴールの質量フィールド（`ArsGoal.initial_co2_mass`、`OgsGoal.input_water_mass` 等）は **キログラム**、水積は **リットル**。`Ros2EclssBridge` が ROS 境界で **グラム ↔ kg** を変換する（トピック読取・ゴール/サービス送信で `g_to_kg` / `kg_to_g`）。
+
+モック電解は `o2_generated_kg()`（水 1 kg あたり O₂ 0.89 kg × `o2_efficiency`、既定 0.95）— 化学量論の収量であり、単位換算ではない。
+
+下記の **生 `ros2` CLI** 例は SSOS ネイティブの **グラム**；Python の `ArsGoal` / `OgsGoal` は **kg**（例: `1.8` kg とワイヤ上の `{initial_co2_mass: 1800.0}`）。
 
 ### 故障注入（Self Diagnosis）
 
@@ -111,7 +119,7 @@ classDiagram
 
 ```python
 ArsGoal(
-    initial_co2_mass=1800.0,
+    initial_co2_mass=1.8,
     initial_moisture_content=25.0,
     initial_contaminants=5.0,
 )
@@ -121,7 +129,7 @@ ArsGoal(
 
 ```python
 OgsGoal(
-    input_water_mass=15.0,
+    input_water_mass=0.015,
     iodine_concentration=2.0,
 )
 ```
@@ -175,7 +183,7 @@ sequenceDiagram
   BE->>SSOS: ros2 action send_goal air_revitalisation
   SSOS-->>BE: SUCCEEDED
 
-  Agent->>BE: request_co2(25.0)
+  Agent->>BE: request_co2(0.025)
   BE->>SSOS: ros2 service call /ars/request_co2
   SSOS-->>BE: success
 

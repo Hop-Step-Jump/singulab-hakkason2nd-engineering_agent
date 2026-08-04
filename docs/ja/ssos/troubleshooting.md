@@ -27,7 +27,7 @@ ros2 node info /air_revitalisation | grep -A1 'Action Servers'
 
 ### 対処
 
-正しい型で手動送信:
+正しい型で手動送信（質量フィールドは SSOS ワイヤ上 **グラム** — `1800.0` ≈ 1.8 kg）:
 
 ```bash
 ros2 action send_goal /air_revitalisation \

@@ -188,17 +188,17 @@ Phase 7a は **`Ros2EclssBridge` クライアント側 remap** のみ。SSOS ノ
 
 CLI v3 では **ホスト 1 コマンド実行と results マウント** に集中する。以下はシミュレーション／可視化レイヤで別途実装する。
 
-### P1 — プラント初期状態（CO2=500kg）
+### P1 — プラント初期状態（ros2 と mock）
 
 | 項目 | 説明 |
 |------|------|
-| `scenario.yaml` | `simulation.initial_co2_storage_kg: 500`（mock 用。現状 1500） |
+| `scenario.yaml` | mock 既定は教育用スケール kg（`initial_co2_storage_kg: 1.5`；`thresholds` 参照） |
 | ros2 step 0 | headless 再起動後の `/co2_storage` を `summary.plant_initial_co2_storage_kg` に記録 |
-| 検証 | `initial_co2_storage_kg`（500）との許容差外で fail fast（SSOS launch 設定を案内） |
+| 検証 | シナリオ目標との許容差外で fail fast（SSOS launch 設定を案内） |
 | テスト | `tests/scenario/test_ssos_eclss_loop.py` の CO2 期待値更新 |
-| SSOS 側 | headless デフォルトが 500kg でない場合、launch パラメータ調査（engineering_agents 単独では物理状態を捏造しない） |
+| SSOS 側 | headless 既定が期待プラント状態と食い違う場合、launch パラメータ調査（engineering_agents 単独では物理状態を捏造しない） |
 
-**意図**: run 間で状態が残らないことは CLI（headless 再起動）で担保。目標 CO2 水準と検証はシナリオ／プラント契約。
+**意図**: run 間で状態が残らないことは CLI（headless 再起動）で担保。ros2 プラント（ワイヤ上グラム）をブリッジ換算でシナリオ閾値と整合 — トン単位の mock リテラルではない。
 
 ### P1 — Streamlit ダッシュボード（SSOS リッチ表示）
 

@@ -13,9 +13,9 @@ ECLSS operation interface replacing Crew Simulation. Phase 1b covers ARS+OGS; Ph
 
 ### poll_telemetry() → EclssTelemetrySnapshot
 
-Fetch the latest snapshot from ROS 2 topics.
+Fetch the latest snapshot from ROS 2 topics. `Ros2EclssBridge` converts SSOS topic **grams** to snapshot **kg**; see [ECLSS integration — Units and conversions](eclss-integration.md#units-and-conversions).
 
-| Field | Source topic | Unit |
+| Field | Source topic | Unit (snapshot) |
 | --- | --- | --- |
 | `co2_storage_kg` | `/co2_storage` | kg |
 | `o2_storage_kg` | `/o2_storage` | kg |

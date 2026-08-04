@@ -60,7 +60,7 @@ This document aggregates **features not yet complete** and the **research backlo
 | LLM comparison experiments | Trajectory comparison across models, temperature, run_id (dashboard compare) | [architecture.md](architecture.md) |
 | Documentation | Keep `docs/ja/` and `docs/en/` in sync with code and memos | [MAINTENANCE.md](MAINTENANCE.md) |
 
-**Out of CLI v3 scope** (backlog): CO2=500kg plant init, ros2 step-0 validation, rich SSOS Streamlit views — [BL-006](memo/backlog.md#bl-006)
+**Out of CLI v3 scope** (backlog): ros2 plant initial-state validation vs scenario kg thresholds, rich SSOS Streamlit views — [BL-006](memo/backlog.md#bl-006)
 
 **Next integration phase (under consideration)**: EA step vs SSOS physics time — expanded mock vs upstream sim clock — [BL-007](memo/backlog.md#bl-007) (separate from CLI v3 / Phase 8)
 

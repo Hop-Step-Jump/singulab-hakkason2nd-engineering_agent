@@ -590,12 +590,12 @@ SsosEclssLoopTeam                         # scenario/agents/ssos_eclss_loop_team
 
 ### Health (storage kg)
 
-`compute_eclss_storage_health()` — `src/scenario/ssos_eclss_loop/health.py`
+`compute_eclss_storage_health()` — `src/scenario/ssos_eclss_loop/health.py`. Defaults match `scenario.yaml` `thresholds` (teaching-scale kg, not tonnes). Mass units and ROS g↔kg boundary: `src/environment/ssos/eclss/units.py`, [ssos/eclss-integration.md](ssos/eclss-integration.md#units-and-conversions).
 
 | Metric | safe | warning | critical |
 | --- | --- | --- | --- |
-| CO₂ (kg) | < 1500 | 1500 to < 2200 | ≥ 2200 |
-| O₂ (kg) | > 450 | 337.5 to 450 | ≤ 337.5 |
+| CO₂ (kg) | < 1.5 | 1.5 to < 2.2 | ≥ 2.2 |
+| O₂ (kg) | > 0.45 | 0.3375 to 0.45 | ≤ 0.3375 |
 | Product water (L) | > 50 | 25 to 50 | ≤ 25 |
 
 `thresholds.co2_storage_high_kg`, etc. are operational triggers, separate from health bands.

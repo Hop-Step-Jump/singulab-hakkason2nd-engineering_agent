@@ -601,13 +601,13 @@ SsosEclssLoopTeam                         # scenario/agents/ssos_eclss_loop_team
 
 ### ヘルス（ストレージ kg）
 
-`compute_eclss_storage_health()` — `src/scenario/ssos_eclss_loop/health.py`
+`compute_eclss_storage_health()` — `src/scenario/ssos_eclss_loop/health.py`。既定値は `scenario.yaml` の `thresholds` と一致（教育用スケールの kg。トン単位ではない）。質量単位と ROS の g↔kg 境界: `src/environment/ssos/eclss/units.py`、[ssos/eclss-integration.md](ssos/eclss-integration.md#units-and-conversions)。
 
 
 | 指標       | safe   | warning        | critical |
 | -------- | ------ | -------------- | -------- |
-| CO₂ (kg) | < 1500 | 1500 〜 2200 未満 | ≥ 2200   |
-| O₂ (kg)  | > 450  | 337.5 〜 450    | ≤ 337.5  |
+| CO₂ (kg) | < 1.5 | 1.5 〜 2.2 未満 | ≥ 2.2   |
+| O₂ (kg)  | > 0.45  | 0.3375 〜 0.45    | ≤ 0.3375  |
 | 製品水 (L)  | > 50   | 25 〜 50        | ≤ 25     |
 
 

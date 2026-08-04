@@ -75,7 +75,7 @@
 | ドキュメント整備                     | `docs/ja/` / `docs/en/` をコード・memo と同期                                                          | [MAINTENANCE.md](MAINTENANCE.md)                                                          |
 
 
-**CLI v3 スコープ外**（バックログ）: CO2=500kg 初期値・ros2 プラント検証、Streamlit SSOS リッチ表示 → [BL-006](memo/backlog.md#bl-006)
+**CLI v3 スコープ外**（バックログ）: ros2 プラント初期状態とシナリオ kg 閾値の検証、Streamlit SSOS リッチ表示 → [BL-006](memo/backlog.md#bl-006)
 
 **接合の次段階（検討）**: EA step と SSOS 物理時間の同期 — Mock 拡充 vs upstream sim clock → [BL-007](memo/backlog.md#bl-007)（CLI v3 / Phase 8 とは別トラック）
 

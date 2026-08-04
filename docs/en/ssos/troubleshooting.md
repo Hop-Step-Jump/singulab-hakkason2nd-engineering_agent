@@ -28,7 +28,7 @@ ros2 node info /air_revitalisation | grep -A1 'Action Servers'
 
 ### Fix
 
-Send manually with the correct type:
+Send manually with the correct type (mass fields are **grams** on the SSOS wire — `1800.0` ≈ 1.8 kg):
 
 ```bash
 ros2 action send_goal /air_revitalisation \

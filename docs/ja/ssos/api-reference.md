@@ -12,9 +12,9 @@ Crew Simulation 代替の ECLSS 操作インターフェース。Phase 1b で AR
 
 ### poll_telemetry() → EclssTelemetrySnapshot
 
-ROS 2 トピックから最新スナップショットを取得。
+ROS 2 トピックから最新スナップショットを取得。`Ros2EclssBridge` は SSOS トピックの **グラム** をスナップショットの **kg** に変換する（[ECLSS 統合 — Units and conversions](eclss-integration.md#units-and-conversions)）。
 
-| フィールド | ソース topic | 単位 |
+| フィールド | ソース topic | 単位（スナップショット） |
 | --- | --- | --- |
 | `co2_storage_kg` | `/co2_storage` | kg |
 | `o2_storage_kg` | `/o2_storage` | kg |
