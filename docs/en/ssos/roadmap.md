@@ -15,7 +15,7 @@ SSOS integration progress on `main` and backlog items. See also [development-pla
 | **2** | + WRS | ✅ **Complete** | `run_ssos_eclss_2_smoke.sh`, water tradeoff signal |
 | **3** | EPS ROS2 integration | ✅ **Complete** | `EpsBackend`, `run_ssos_eps_smoke.sh`, `eps.backend` switch |
 | **4** | `ssos_eclss_loop` + `SsosEclssLoopTeam` | ✅ **Complete** | mock/ros2 scenario runs, telemetry JSONL |
-| **5** | `operational_proposals.json` + `design_proposals.json` + `--apply-proposals` | ✅ **Complete** | Post-run proposals and next-run apply |
+| **5** | `design_proposals.json` + `--apply-proposals` | ✅ **Complete** | Post-run proposals and next-run apply |
 | **6** | LLM agents + Docker `ea-loop` (ros2 / Ollama defaults) | ✅ **Complete** | Container loop with LLM mode |
 | **7** | Client `graph_rewire`, `Team` ABC, SSOS dashboard views | ✅ **Complete** | Remap client + dashboard |
 | **8** | ROS launch remap + gateway | 📋 **Backlog** | Apply `graph_rewire` at launch ([BL-003](../memo/backlog.md#bl-003)) |
@@ -34,7 +34,7 @@ gantt
   Phase 3 EPS bridge                 :done, p3, 2026-06-13, 4d
   section Scenario
   Phase 4 ssos_eclss_loop            :done, p4, 2026-06-14, 3d
-  Phase 5 operational + design proposals :done, p5, 2026-06-15, 7d
+  Phase 5 design proposals + apply   :done, p5, 2026-06-15, 7d
   Phase 6 LLM + ea-loop              :done, p6, 2026-06-18, 5d
   Phase 7 graph_rewire + dashboard   :done, p7, 2026-06-20, 5d
   section Backlog
@@ -49,7 +49,7 @@ gantt
 | --- | --- |
 | `SimulatorProtocol.apply_design_change` | Removed |
 | `scrubber_degradation` | Mock frozen; post-run `design_proposals.json` retained |
-| New proposal formats | `operational_proposals.json`, `design_proposals.json` (`ssos_graph`) — Phase 5 |
+| New proposal format | `design_proposals.json` (`design_domain: ssos_graph`) — Phase 5 |
 
 ---
 
@@ -86,7 +86,7 @@ gantt
 
 | File | Role |
 | --- | --- |
-| `eclss/ros2/bridge.py` (extended) | WRS action + product/grey water service |
+| `src/environment/ssos/eclss/ros2/bridge.py` (extended) | WRS action + product/grey water service |
 | `src/scripts/ssos_eclss_2_smoke.py` | Phase 2 smoke |
 | `scripts/run_ssos_eclss_2_smoke.sh` | Wrapper |
 
@@ -100,12 +100,12 @@ Verification: potable vs electrolysis water tradeoff, `water_tradeoff_signal`
 
 | File | Role |
 | --- | --- |
-| `scrubber/eps/backend.py` | Protocol |
-| `scrubber/eps/mock/backend.py` | Mock wrapper |
-| `ssos/eps/ros2/bridge.py` | CLI bridge |
-| `ssos/eps/ros2/topic_map.py` | SSOS live topic map |
-| `ssos/eps/ros2/adapters.py` | BCDU parsing |
-| `scrubber/station_simulator.py` | Refactored to use `EpsBackend` |
+| `src/environment/scrubber/eps/backend.py` | Protocol |
+| `src/environment/scrubber/eps/mock/backend.py` | Mock wrapper |
+| `src/environment/ssos/eps/ros2/bridge.py` | CLI bridge |
+| `src/environment/ssos/eps/ros2/topic_map.py` | SSOS live topic map |
+| `src/environment/ssos/eps/ros2/adapters.py` | BCDU parsing |
+| `src/environment/scrubber/station_simulator.py` | Refactored to use `EpsBackend` |
 | `src/scripts/ssos_eps_smoke.py` | EPS smoke |
 | `scripts/run_ssos_eps_smoke.sh` | Wrapper |
 
@@ -132,8 +132,7 @@ Verification: potable vs electrolysis water tradeoff, `water_tradeoff_signal`
 
 | Item | Description |
 | --- | --- |
-| `operational_proposals.json` | Post-run proposals: `set_parameter` / `action_profile` / `service_config` |
-| `design_proposals.json` | `design_domain: ssos_graph` topology proposals |
+| `design_proposals.json` | Post-run proposals (`design_domain: ssos_graph`): `set_parameter` / `action_profile` / `service_config` / `graph_rewire` |
 | `--apply-proposals` | Apply proposals on the next run |
 
 ### Action/Service Proposal Applicability
@@ -199,8 +198,8 @@ Verification: potable vs electrolysis water tradeoff, `water_tradeoff_signal`
 ## Test Status
 
 ```bash
-pytest
-# Expected: 140 passed, 4 skipped (ROS2 live / outside-container tests skip)
+python3 -m pytest --ignore=tests/e2e
+# Expected: 238 passed, 4 skipped (ROS2 live / outside-container tests skip)
 ```
 
 ---

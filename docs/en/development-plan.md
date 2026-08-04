@@ -57,9 +57,8 @@ This document aggregates **features not yet complete** and the **research backlo
 | Item | Description | Reference |
 | --- | --- | --- |
 | **CLI v3 — SSOS one command from host** | Volume mounts + `ea run ssos_eclss_loop` (internal bash), `duration_wall_s`, rclpy shutdown, `ea results` | [cli.md](cli.md) |
-| PR #9 merge and stabilization | `feat/ssos-eclss-loop` → `main` | connection plan |
 | LLM comparison experiments | Trajectory comparison across models, temperature, run_id (dashboard compare) | [architecture.md](architecture.md) |
-| Documentation | Sync `docs/ja/` and `docs/en/` with memo | this update |
+| Documentation | Keep `docs/ja/` and `docs/en/` in sync with code and memos | [MAINTENANCE.md](MAINTENANCE.md) |
 
 **Out of CLI v3 scope** (backlog): CO2=500kg plant init, ros2 step-0 validation, rich SSOS Streamlit views — [BL-006](memo/backlog.md#bl-006)
 

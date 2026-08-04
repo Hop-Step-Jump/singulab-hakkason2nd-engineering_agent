@@ -17,7 +17,7 @@ For scenario specification (agents, outputs, dashboard), see [ssos_eclss_loop sc
 | --- | --- |
 | Human operator controls ARS/OGS via GUI | AI agent reproduces the same operations via `EclssBackend` API |
 | Pass/fail can be subjective | Verification via telemetry JSONL + deterministic `health_metrics` |
-| Design and operations easily conflated | Runtime uses **operational commands only**; persistent changes are post-run proposals (Phase 5 planned) |
+| Design and operations easily conflated | Runtime uses **operational commands only**; persistent changes are post-run `design_proposals.json` (Phase 5) |
 
 Agents must not become a **self-grading** loop where an LLM declares pass in place of a physics simulator. Pass/fail is decided from raw telemetry on the SSOS Docker ROS 2 graph against scenario YAML thresholds (see [AGENTS.md](../AGENTS.md)).
 
@@ -35,7 +35,7 @@ Integration deepens in stages. Each tier can be smoke-tested independently.
 | **T2** | 2 | + WRS (potable water vs electrolysis water) | `Ros2EclssBridge` | `run_ssos_eclss_2_smoke.sh` |
 | **T3** | 3 | EPS read + `request_eps_boost` interim | `Ros2EpsBridge` | `run_ssos_eps_smoke.sh` |
 | **T4** | 4 | `ssos_eclss_loop` scenario + agents | mock \| ros2 switch | `scenario_run.py` |
-| **T5** | 5 | `operational_proposals.json` + apply on next run | — | Not started |
+| **T5** | 5 | `design_proposals.json` + `--apply-proposals` | — | `scenario_run.py` |
 | **Regression** | — | Container E2E orchestrator (pytest + smoke chain + ea-loop) | `run_ssos_regression.sh` | `.github/workflows/ssos-e2e.yml` |
 
 ---

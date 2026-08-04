@@ -694,4 +694,19 @@ Project-scoped subagent prompts for Cursor. Parent agents delegate exploration o
 
 Both agents enforce layer discipline (`tools → scenario → environment → core`) and repository guardrails from [AGENTS.md](AGENTS.md). Prompts live in `.cursor/agents/*.md` (not user-global `~/.cursor/agents/`).
 
+### Cursor skills (`.cursor/skills/`)
+
+Project-scoped slash-command skills for Cursor. Invoked explicitly by the user (`/skill-name`); most set `disable-model-invocation: true` so they do not auto-attach.
+
+| Skill | Invoke | Use when |
+| --- | --- | --- |
+| `onboard` | `/onboard` | Lightweight onboarding interview and handoff |
+| `review` | `/review` | Route to Bugbot or Security Review subagent |
+| `shell` | `/shell` | Run following text as a literal shell command |
+| `create-subagent` | `/create-subagent` | Author a new `.cursor/agents/*.md` subagent |
+| `migrate-to-skills` | `/migrate-to-skills` | Convert legacy Cursor rules into skill format |
+| `update-cli-config` | `/update-cli-config` | Edit `~/.cursor/cli-config.json` CLI preferences |
+
+Skill definitions: `.cursor/skills/<name>/SKILL.md`. Subagents and skills are complementary — subagents are delegated tasks; skills are user-invoked workflows.
+
 Next implementation: [development-plan.md](development-plan.md) · API details: [api-contracts.md](api-contracts.md)

@@ -71,9 +71,8 @@
 | 項目                           | 説明                                                                                          | 参照                                                           |
 | ---------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
 | **CLI v3 — SSOS ホスト 1 コマンド** | ボリュームマウント + `ea run ssos_eclss_loop`（内部 bash）、`duration_wall_s`、rclpy shutdown、`ea results` | [cli.md](cli.md), [memo/cli_v3_plan.md](memo/cli_v3_plan.md) |
-| PR #9 マージ・安定化                | `feat/ssos-eclss-loop` → `main`                                                             | connection plan                                              |
 | LLM 比較実験                     | モデル・温度・run_id を変えた軌道比較（ダッシュボード compare）                                                     | [architecture.md](architecture.md)                           |
-| ドキュメント整備                     | `docs/ja/` / `docs/en/` と memo の同期                                                          | 本更新                                                          |
+| ドキュメント整備                     | `docs/ja/` / `docs/en/` をコード・memo と同期                                                          | [MAINTENANCE.md](MAINTENANCE.md)                                                          |
 
 
 **CLI v3 スコープ外**（バックログ）: CO2=500kg 初期値・ros2 プラント検証、Streamlit SSOS リッチ表示 → [BL-006](memo/backlog.md#bl-006)

@@ -17,7 +17,7 @@
 | --- | --- |
 | 人間オペレータが GUI で ARS/OGS を操作 | AI エージェントが `EclssBackend` API で同操作を再現 |
 | 合否が主観的になりうる | テレメトリ JSONL + 決定論的 `health_metrics` で検証 |
-| 設計と運用が混在しやすい | ランタイムは **運用コマンドのみ**、恒久変更は事後提案（Phase 5 予定） |
+| 設計と運用が混在しやすい | ランタイムは **運用コマンドのみ**、恒久変更は事後 `design_proposals.json`（Phase 5） |
 
 エージェントは「物理シミュレータの代わりに LLM が合格を宣言する」**自作自演**になってはなりません。SSOS Docker 上の ROS 2 グラフから取得した生テレメトリを入力に、シナリオ YAML の閾値で pass/fail を決めます（[AGENTS.md](../AGENTS.md) 参照）。
 
@@ -35,7 +35,7 @@
 | **T2** | 2 | + WRS（飲料水 vs 電解水） | `Ros2EclssBridge` | `run_ssos_eclss_2_smoke.sh` |
 | **T3** | 3 | EPS 読取 + `request_eps_boost` interim | `Ros2EpsBridge` | `run_ssos_eps_smoke.sh` |
 | **T4** | 4 | `ssos_eclss_loop` シナリオ + エージェント | mock \| ros2 切替 | `scenario_run.py` |
-| **T5** | 5 | `operational_proposals.json` + 次 run 適用 | — | 未着手 |
+| **T5** | 5 | `design_proposals.json` + `--apply-proposals` | — | `scenario_run.py` |
 | **Regression** | — | コンテナ E2E オーケストレータ（pytest + smoke 連鎖 + ea-loop） | `run_ssos_regression.sh` | `.github/workflows/ssos-e2e.yml` |
 
 ---

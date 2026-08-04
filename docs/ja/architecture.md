@@ -717,4 +717,19 @@ Cursor 向けのプロジェクトスコープサブエージェントプロン�
 
 いずれもレイヤー規律（`tools → scenario → environment → core`）と [AGENTS.md](AGENTS.md) のガードレールを遵守。プロンプトは `.cursor/agents/*.md`（ユーザーグローバル `~/.cursor/agents/` ではない）。
 
+### Cursor スキル（`.cursor/skills/`）
+
+Cursor 向けのプロジェクトスコープスラッシュコマンドスキル。ユーザーが明示的に呼び出す（`/skill-name`）。多くは `disable-model-invocation: true` で自動付与されない。
+
+| スキル | 呼び出し | 用途 |
+| --- | --- | --- |
+| `onboard` | `/onboard` | 軽量オンボーディング面談とハンドオフ |
+| `review` | `/review` | Bugbot または Security Review サブエージェントへ振り分け |
+| `shell` | `/shell` | 続くテキストをそのままシェルコマンドとして実行 |
+| `create-subagent` | `/create-subagent` | 新しい `.cursor/agents/*.md` サブエージェントを作成 |
+| `migrate-to-skills` | `/migrate-to-skills` | 旧 Cursor ルールをスキル形式へ変換 |
+| `update-cli-config` | `/update-cli-config` | `~/.cursor/cli-config.json` の CLI 設定を編集 |
+
+定義: `.cursor/skills/<name>/SKILL.md`。サブエージェントとスキルは補完関係 — サブエージェントは委譲タスク、スキルはユーザー起動ワークフロー。
+
 次の実装: [development-plan.md](development-plan.md) · API 詳細: [api-contracts.md](api-contracts.md)

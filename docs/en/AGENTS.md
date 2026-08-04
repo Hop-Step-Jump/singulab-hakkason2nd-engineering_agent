@@ -234,6 +234,18 @@ LLM mode requires Ollama. Prefer Fake LLM / `labeled_rule_base` for CI and regre
 
 ---
 
+## Contributing — filing issues
+
+For feature, design, or integration proposals, use the **First-principles proposal** GitHub issue template (`.github/ISSUE_TEMPLATE/first_principles.md`). It structures four sections — current problem (A), why it matters (B), scope in/out (C), and expected outcome (D). **If you cannot fill them in concretely, the work is not ready to file.**
+
+**Repository definition of first-principles thinking** (issue template §0):
+
+> An approach that questions existing conventions and precedents, decomposes problems down to their fundamental elements, and builds new solutions by stacking only facts that can be reliably proven.
+
+This is **not** the same as the `first_principles` **thinking-style archetype** lens in `team.archetypes` (agent deliberation prompts in `src/core/agents/persona.py`). The issue template governs **whether work is justified**; archetypes govern **how agents reason** during simulation.
+
+---
+
 ## Related documentation
 
 
