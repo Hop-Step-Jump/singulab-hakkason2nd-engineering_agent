@@ -56,7 +56,7 @@ def check_ssos_ros2_host_environment(spec: RunSpec) -> RunResult | None:
         error=(
             "Docker is required for ssos_eclss_loop with the default ros2 backend. "
             "Install Docker, start the SSOS container (./scripts/ssos/mac/ssos-run-detached.sh), "
-            "or pass --backend mock for local mock runs."
+            "or pass --backend mock / --backend plant_sim for local runs."
         ),
     )
 

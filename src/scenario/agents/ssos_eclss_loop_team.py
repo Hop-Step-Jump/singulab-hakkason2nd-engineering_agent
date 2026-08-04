@@ -21,7 +21,7 @@ from core.agents.persona import (
 from core.agents.types import AgentMessage, DeliberationPhase
 from core.llm.ollama import OllamaClient, resolve_ollama_base_url
 from environment.ssos.eclss.backend import EclssBackend
-from environment.ssos.eclss.types import ArsGoal, OgsGoal
+from environment.ssos.eclss.types import ArsGoal, OgsGoal, WrsGoal
 from scenario.agents.eclss_loop_types import (
     EclssLoopObservation,
     EclssOperationalCommand,
@@ -35,11 +35,12 @@ from scenario.ssos_eclss_loop.design_proposals import (
 )
 
 _ECLSS_OPERATIONAL_KINDS = frozenset(
-    {"air_revitalisation", "oxygen_generation", "request_co2", "request_o2"}
+    {"air_revitalisation", "oxygen_generation", "water_recovery", "request_co2", "request_o2"}
 )
 
 _ARS_GOAL_FIELDS = frozenset({"initial_co2_mass", "initial_moisture_content", "initial_contaminants"})
 _OGS_GOAL_FIELDS = frozenset({"input_water_mass", "iodine_concentration"})
+_WRS_GOAL_FIELDS = frozenset({"urine_volume"})
 
 
 @dataclass
@@ -49,6 +50,7 @@ class EclssLoopTeamState:
     ars_critical_escalated: bool = False
     co2_requested: bool = False
     ogs_invoked: bool = False
+    wrs_invoked: bool = False
     co2_at_ars_dispatch: Optional[float] = None
     o2_at_ogs_dispatch: Optional[float] = None
 
@@ -325,6 +327,36 @@ class SsosEclssLoopTeam(Team):
                 )
             )
 
+        # WRS: reclaim water once urine/grey feed has accumulated (plant_sim closes
+        # the water loop). Threshold-gated, so it re-fires as buffers refill.
+        raw_topics = obs.telemetry.raw_topics or {}
+        plant_sim_topics = raw_topics.get("plant_sim") if isinstance(raw_topics, dict) else {}
+        urine_buffer_l = 0.0
+        if isinstance(plant_sim_topics, dict):
+            urine_buffer_l = float(plant_sim_topics.get("urine_buffer_l") or 0.0)
+        waste_feed_l = float(obs.telemetry.grey_water_collected_l or 0.0) + urine_buffer_l
+        wrs_trigger_l = float(self.policy.get("wrs_feed_trigger_l", 0.5))
+        if waste_feed_l >= wrs_trigger_l:
+            wrs_payload = dict(self.policy.get("wrs_goal", {"urine_volume": 2.0}))
+            commands.append(
+                EclssOperationalCommand(
+                    kind="water_recovery",
+                    payload=wrs_payload,
+                    issued_by=rep,
+                )
+            )
+            messages.append(
+                AgentMessage(
+                    step=obs.step,
+                    from_role=rep,
+                    to_role="team",
+                    message="Starting WRS water_recovery to reclaim urine/grey water.",
+                    message_type="operational_command",
+                    reasoning=f"Waste feed {waste_feed_l:.2f} L >= {wrs_trigger_l:.2f} L.",
+                    metadata=self._rule_metadata(),
+                )
+            )
+
         return messages, commands
 
     def _llm_deliberation_turn(
@@ -597,6 +629,12 @@ class SsosEclssLoopTeam(Team):
                 return None, "oxygen_generation payload needs numeric OGS goal fields"
             return EclssOperationalCommand(kind=kind, payload=normalized, issued_by=issued_by), None
 
+        if kind == "water_recovery":
+            normalized = self._normalize_numeric_fields(payload, _WRS_GOAL_FIELDS)
+            if normalized is None:
+                return None, "water_recovery payload needs numeric WRS goal fields"
+            return EclssOperationalCommand(kind=kind, payload=normalized, issued_by=issued_by), None
+
         if kind in {"request_co2", "request_o2"}:
             try:
                 amount = float(payload.get("amount"))
@@ -669,6 +707,8 @@ class SsosEclssLoopTeam(Team):
             result = backend.send_air_revitalisation_goal(ArsGoal(**payload))
         elif kind == "oxygen_generation":
             result = backend.send_oxygen_generation_goal(OgsGoal(**payload))
+        elif kind == "water_recovery":
+            result = backend.send_water_recovery_goal(WrsGoal(**payload))
         elif kind == "request_co2":
             result = backend.request_co2(float(payload["amount"]))
         elif kind == "request_o2":

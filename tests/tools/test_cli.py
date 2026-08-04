@@ -157,6 +157,31 @@ def test_run_ssos_mock_without_docker_allowed(monkeypatch, tmp_path: Path):
     assert (output_dir / "summary.json").exists()
 
 
+def test_run_ssos_plant_sim_without_docker_allowed(monkeypatch, tmp_path: Path):
+    monkeypatch.delenv("EA_RUN_IN_CONTAINER", raising=False)
+    monkeypatch.setattr("tools.cli.ssos_host.shutil.which", lambda _: None)
+    output_dir = tmp_path / "plant-sim-run"
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "ssos_eclss_loop",
+            "--backend",
+            "plant_sim",
+            "--agents-mode",
+            "none",
+            "--steps",
+            "2",
+            "--output-dir",
+            str(output_dir),
+            "--quiet",
+        ],
+    )
+    assert result.exit_code == 0
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary.get("backend") == "plant_sim"
+
+
 def test_run_dry_run_write_spec(tmp_path: Path):
     spec_path = tmp_path / "job.json"
     result = runner.invoke(

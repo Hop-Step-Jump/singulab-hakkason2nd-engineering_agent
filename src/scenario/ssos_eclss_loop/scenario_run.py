@@ -131,6 +131,10 @@ def build_eclss_backend(config: Dict[str, Any], kind: Optional[str] = None) -> E
     backend_kind = kind or resolve_backend_kind(config)
     if backend_kind == "mock":
         return LoopMockEclssBackend(config)
+    if backend_kind == "plant_sim":
+        from environment.ssos.eclss.plant_sim import PlantSimEclssBackend
+
+        return PlantSimEclssBackend.from_scenario_config(config)
     if backend_kind == "ros2":
         from environment.ssos.eclss.ros2.bridge import Ros2EclssBridge
 
@@ -144,7 +148,9 @@ def build_eclss_backend(config: Dict[str, Any], kind: Optional[str] = None) -> E
             telemetry_max_age_s=telemetry_max_age_s,
             topic_remap=build_topic_remap(rewires),
         )
-    raise ValueError(f"Unknown ECLSS backend kind: {backend_kind!r} (expected mock or ros2)")
+    raise ValueError(
+        f"Unknown ECLSS backend kind: {backend_kind!r} (expected mock, plant_sim, or ros2)"
+    )
 
 
 class SsosEclssLoopScenario(Scenario):
@@ -229,7 +235,7 @@ class SsosEclssLoopScenario(Scenario):
         min_o2: Optional[float] = None
 
         for step in range(1, steps + 1):
-            if isinstance(backend, LoopMockEclssBackend) and step > 1:
+            if step > 1 and hasattr(backend, "advance_step"):
                 backend.advance_step()
 
             snap = backend.poll_telemetry()
@@ -364,7 +370,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Run ssos_eclss_loop scenario")
     parser.add_argument(
         "--backend",
-        choices=("mock", "ros2"),
+        choices=("mock", "plant_sim", "ros2"),
         help=f"EclssBackend kind (default: scenario.yaml or {BACKEND_ENV_VAR} env)",
     )
     parser.add_argument("--output-dir", type=Path, help="Run output directory")

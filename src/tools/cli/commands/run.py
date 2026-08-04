@@ -17,7 +17,7 @@ from tools.cli.overrides import load_override_file, merge_overrides, parse_set_v
 
 DEFAULT_SCENARIO = "scrubber_degradation"
 VALID_AGENTS_MODES = frozenset({"none", "labeled_rule_base", "llm"})
-VALID_SSOS_BACKENDS = frozenset({"mock", "ros2"})
+VALID_SSOS_BACKENDS = frozenset({"mock", "plant_sim", "ros2"})
 BACKEND_ENV_VAR = "SSOS_ECLSS_BACKEND"
 
 
@@ -50,7 +50,7 @@ def run(
     backend: Optional[str] = typer.Option(
         None,
         "--backend",
-        help="ssos_eclss_loop backend kind: mock or ros2.",
+        help="ssos_eclss_loop backend kind: mock, plant_sim, or ros2.",
     ),
     apply_proposals: Optional[Path] = typer.Option(
         None,

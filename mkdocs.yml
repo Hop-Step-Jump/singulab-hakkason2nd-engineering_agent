@@ -140,6 +140,7 @@ plugins:
                 - ROS2 グラフ設計調査: memo/ssos_eclss_loop/ssos_ros2_graph_design_investigation.md
                 - ECLSS 物理現象: memo/ssos_eclss_loop/ssos_eclss_physical_phenomena_overview.md
                 - EPS 物理現象: memo/ssos_eclss_loop/ssos_eps_physical_phenomena_overview.md
+                - Plant Sim backend 解説: memo/ssos_eclss_loop/plant_sim_backend.md
                 - CLI v3 プラン: memo/cli_v3_plan.md
                 - Persona LLM OOP: memo/agents/persona_llm_core_oop_plan.md
                 - Persona ワークショップ: memo/agents/persona_workshop_draft.md

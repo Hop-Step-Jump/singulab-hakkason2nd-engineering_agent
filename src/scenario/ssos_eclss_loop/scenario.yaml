@@ -11,7 +11,7 @@ simulation:
   initial_product_water_l: 100.0
 
 backend:
-  kind: mock  # mock | ros2 — CLI default is ros2 (requires Docker); override via SSOS_ECLSS_BACKEND
+  kind: mock  # mock | plant_sim | ros2 — CLI default is ros2 (requires Docker); override via SSOS_ECLSS_BACKEND
   ros2:
     action_timeout_s: 120.0
     topic_timeout_s: 15.0

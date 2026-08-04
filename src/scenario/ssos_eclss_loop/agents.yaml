@@ -26,13 +26,20 @@ team:
 policy:
   request_co2_before_ogs: false
   request_co2_amount: 0.025
+  wrs_feed_trigger_l: 0.5
   ars_goal:
     initial_co2_mass: 1.8
     initial_moisture_content: 25.0
     initial_contaminants: 5.0
   ogs_goal:
-    input_water_mass: 0.015
+    # SHAKEOUT tuning: one-shot OGS latch only re-fires ~every other step, so the
+    # per-action water must cover >1 step of 4-crew O2 demand or O2 starves to 0.
+    # 0.15 kg holds O2 in the safe band. Post-merge: decouple action duration (B4)
+    # or make OGS re-fire every step while below band, then right-size this.
+    input_water_mass: 0.15
     iodine_concentration: 2.0
+  wrs_goal:
+    urine_volume: 2.0
 
 llm:
   # Host mock: localhost. In SSOS Docker use host.docker.internal (ea-loop sets OLLAMA_BASE_URL).

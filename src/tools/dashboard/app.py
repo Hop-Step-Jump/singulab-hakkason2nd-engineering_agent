@@ -67,6 +67,11 @@ def _build_line_plot_figure(
         return None
 
     plot_rows = series_by_step(telemetry_rows)
+    if not plot_rows:
+        return None
+    # Scrubber charts require ppm / power fields; SSOS backends (mock/plant_sim/ros2) omit them.
+    if any("co2_ppm" not in row or "power_margin_w" not in row for row in plot_rows):
+        return None
     steps = [int(r["step"]) for r in plot_rows]
     scrubber_eff = [float(r.get("scrubber_efficiency", 0.0)) for r in plot_rows]
     co2 = [float(r["co2_ppm"]) for r in plot_rows]
@@ -177,7 +182,10 @@ def _line_plot(
         highlight_step=current_step,
     )
     if fig is None:
-        st.info("No telemetry data found.")
+        if telemetry_rows:
+            st.info("Scrubber telemetry fields (co2_ppm / power_margin_w) not present for this run.")
+        else:
+            st.info("No telemetry data found.")
         return
     st.pyplot(fig, use_container_width=True)
 
@@ -206,7 +214,10 @@ def _render_static_replay_plot(run: RunViewData, current_step: int) -> None:
 
     fig = st.session_state.get("replay_static_plot_fig")
     if fig is None:
-        st.info("No telemetry data found.")
+        if run.telemetry:
+            st.info("Scrubber telemetry fields (co2_ppm / power_margin_w) not present for this run.")
+        else:
+            st.info("No telemetry data found.")
         return
     _set_plot_highlight(fig, current_step)
     st.pyplot(fig, use_container_width=True, clear_figure=False)
@@ -454,6 +465,15 @@ def _replay_step_controls(max_step: int) -> int:
     return int(st.session_state.replay_step)
 
 
+def _render_ssos_center_panel(run: RunViewData, current_step: int) -> None:
+    ssos_views.render_ssos_summary_highlights(run.summary)
+    ssos_views.render_ssos_health_card(run.telemetry, run.health, current_step)
+    ssos_views.render_ssos_storage_plot(run.telemetry, highlight_step=current_step)
+    ssos_views.render_plant_sim_panel(run.telemetry, highlight_step=current_step)
+    st.subheader("Operational commands")
+    ssos_views.render_ssos_operational_timeline(run.events)
+
+
 def _render_run_replay_view(run: RunViewData) -> None:
     """Per-run step replay: timeline, plots, and agent discourse."""
     max_step = _max_telemetry_step(run.telemetry)
@@ -470,8 +490,11 @@ def _render_run_replay_view(run: RunViewData) -> None:
         _render_event_timeline(run.events, current_step)
 
     with center_col:
-        _render_health_card(run.telemetry, run.health, run.eps_telemetry, current_step)
-        _render_static_replay_plot(run, current_step)
+        if ssos_views.is_ssos_eclss_loop(run.summary):
+            _render_ssos_center_panel(run, current_step)
+        else:
+            _render_health_card(run.telemetry, run.health, run.eps_telemetry, current_step)
+            _render_static_replay_plot(run, current_step)
 
     with right_col:
         _render_agent_scroll_feed(
@@ -1403,41 +1426,53 @@ def _render_dual_run_views(primary: RunViewData, compare: RunViewData, current_s
         ),
     )
 
-    if ssos_views.is_ssos_eclss_loop(primary.summary):
-        _render_paired_columns(
-            lambda: ssos_views.render_ssos_health_card(
-                primary.telemetry, primary.health, current_step
-            ),
-            lambda: ssos_views.render_ssos_health_card(
-                compare.telemetry, compare.health, current_step
-            ),
-        )
-        _render_paired_columns(
-            lambda: ssos_views.render_ssos_storage_plot(
-                primary.telemetry, highlight_step=current_step
-            ),
-            lambda: ssos_views.render_ssos_storage_plot(
-                compare.telemetry, highlight_step=current_step
-            ),
-        )
-    else:
-        _render_paired_columns(
-            lambda: _render_health_card(
-                primary.telemetry, primary.health, primary.eps_telemetry, current_step
-            ),
-            lambda: _render_health_card(
-                compare.telemetry, compare.health, compare.eps_telemetry, current_step
-            ),
+    primary_ssos = ssos_views.is_ssos_eclss_loop(primary.summary)
+    compare_ssos = ssos_views.is_ssos_eclss_loop(compare.summary)
+    if primary_ssos != compare_ssos:
+        st.warning(
+            "Comparing scrubber_degradation with ssos_eclss_loop mixes different telemetry "
+            "schemas. Each panel uses the view matching that run."
         )
 
-        _render_paired_columns(
-            lambda: _line_plot(primary.telemetry, primary.eps_telemetry, current_step),
-            lambda: _line_plot(compare.telemetry, compare.eps_telemetry, current_step),
-        )
+    def _render_health_for(run: RunViewData) -> None:
+        if ssos_views.is_ssos_eclss_loop(run.summary):
+            ssos_views.render_ssos_health_card(run.telemetry, run.health, current_step)
+        else:
+            _render_health_card(run.telemetry, run.health, run.eps_telemetry, current_step)
 
-    if not ssos_views.is_ssos_eclss_loop(primary.summary):
+    def _render_plots_for(run: RunViewData) -> None:
+        if ssos_views.is_ssos_eclss_loop(run.summary):
+            ssos_views.render_ssos_storage_plot(run.telemetry, highlight_step=current_step)
+            ssos_views.render_plant_sim_panel(run.telemetry, highlight_step=current_step)
+        else:
+            _line_plot(run.telemetry, run.eps_telemetry, current_step)
+
+    _render_paired_columns(
+        lambda: _render_health_for(primary),
+        lambda: _render_health_for(compare),
+    )
+    _render_paired_columns(
+        lambda: _render_plots_for(primary),
+        lambda: _render_plots_for(compare),
+    )
+
+    if not primary_ssos and not compare_ssos:
         st.subheader("Design topology — proposal comparison")
         _render_dual_topology_proposal(primary, compare)
+    elif primary_ssos or compare_ssos:
+        st.subheader("Operational commands")
+        _render_paired_columns(
+            lambda: (
+                ssos_views.render_ssos_operational_timeline(primary.events)
+                if primary_ssos
+                else st.caption("Scrubber run — no SSOS operational timeline.")
+            ),
+            lambda: (
+                ssos_views.render_ssos_operational_timeline(compare.events)
+                if compare_ssos
+                else st.caption("Scrubber run — no SSOS operational timeline.")
+            ),
+        )
 
     st.subheader(f"Step {current_step} detail")
     primary_messages = _select_rows_at_step(primary.messages, current_step)
@@ -1480,6 +1515,7 @@ def _render_run_detail_view(run: RunViewData, current_step: int) -> None:
         ssos_views.render_ssos_summary_highlights(run.summary)
         ssos_views.render_ssos_health_card(run.telemetry, run.health, current_step)
         ssos_views.render_ssos_storage_plot(run.telemetry, highlight_step=current_step)
+        ssos_views.render_plant_sim_panel(run.telemetry, highlight_step=current_step)
         st.subheader("Operational commands")
         ssos_views.render_ssos_operational_timeline(run.events)
         ssos_views.render_ssos_design_proposals(run.run_dir)
@@ -1513,51 +1549,107 @@ def _render_run_comparison(
     _render_run_identity_cards(primary_name, primary_summary, compare_name, compare_summary)
 
     st.markdown("**Run outcome**")
-    _render_metric_comparison_table(
-        primary_name,
-        compare_name,
-        [
-            (
-                "Design changes (count)",
-                primary_summary.get("design_change_count", 0),
-                compare_summary.get("design_change_count", 0),
+    primary_ssos = ssos_views.is_ssos_eclss_loop(primary_summary)
+    compare_ssos = ssos_views.is_ssos_eclss_loop(compare_summary)
+    outcome_metrics: List[Tuple[str, Any, Any]] = [
+        (
+            "Design changes (count)",
+            primary_summary.get(
+                "design_change_count",
+                primary_summary.get("design_proposal_count", 0),
             ),
-            (
-                "Provenance records (count)",
-                len(primary_provenance),
-                len(compare_provenance),
+            compare_summary.get(
+                "design_change_count",
+                compare_summary.get("design_proposal_count", 0),
             ),
-            (
-                "Final CO2 (ppm)",
-                primary_summary.get("final_co2_ppm", "—"),
-                compare_summary.get("final_co2_ppm", "—"),
-            ),
-            (
-                "Final power margin (W)",
-                primary_summary.get("final_power_margin_w", "—"),
-                compare_summary.get("final_power_margin_w", "—"),
-            ),
-            (
-                "Final step",
-                primary_summary.get("final_step", "—"),
-                compare_summary.get("final_step", "—"),
-            ),
-            (
-                "Message count",
-                primary_summary.get("message_count", "—"),
-                compare_summary.get("message_count", "—"),
-            ),
-        ],
-    )
+        ),
+        (
+            "Provenance records (count)",
+            len(primary_provenance),
+            len(compare_provenance),
+        ),
+        (
+            "Message count",
+            primary_summary.get("message_count", "—"),
+            compare_summary.get("message_count", "—"),
+        ),
+    ]
+    if primary_ssos or compare_ssos:
+        outcome_metrics.extend(
+            [
+                (
+                    "Backend",
+                    primary_summary.get("backend", "—"),
+                    compare_summary.get("backend", "—"),
+                ),
+                (
+                    "Final CO2 storage (kg)",
+                    primary_summary.get("final_co2_storage_kg", "—"),
+                    compare_summary.get("final_co2_storage_kg", "—"),
+                ),
+                (
+                    "Final O2 storage (kg)",
+                    primary_summary.get("final_o2_storage_kg", "—"),
+                    compare_summary.get("final_o2_storage_kg", "—"),
+                ),
+                (
+                    "Min O2 storage (kg)",
+                    primary_summary.get("min_o2_storage_kg", "—"),
+                    compare_summary.get("min_o2_storage_kg", "—"),
+                ),
+                (
+                    "Final product water (L)",
+                    primary_summary.get("final_product_water_reserve_l", "—"),
+                    compare_summary.get("final_product_water_reserve_l", "—"),
+                ),
+                (
+                    "Ops commands",
+                    primary_summary.get("operational_command_count", "—"),
+                    compare_summary.get("operational_command_count", "—"),
+                ),
+                (
+                    "ARS invoked step",
+                    primary_summary.get("ars_invoked_step", "—"),
+                    compare_summary.get("ars_invoked_step", "—"),
+                ),
+                (
+                    "OGS invoked step",
+                    primary_summary.get("ogs_invoked_step", "—"),
+                    compare_summary.get("ogs_invoked_step", "—"),
+                ),
+            ]
+        )
+    if not primary_ssos or not compare_ssos:
+        outcome_metrics.extend(
+            [
+                (
+                    "Final CO2 (ppm)",
+                    primary_summary.get("final_co2_ppm", "—"),
+                    compare_summary.get("final_co2_ppm", "—"),
+                ),
+                (
+                    "Final power margin (W)",
+                    primary_summary.get("final_power_margin_w", "—"),
+                    compare_summary.get("final_power_margin_w", "—"),
+                ),
+                (
+                    "Final step",
+                    primary_summary.get("final_step", "—"),
+                    compare_summary.get("final_step", "—"),
+                ),
+            ]
+        )
+    _render_metric_comparison_table(primary_name, compare_name, outcome_metrics)
 
-    _render_power_recovery_comparison(
-        primary_name,
-        primary_events,
-        primary_summary,
-        compare_name,
-        compare_events,
-        compare_summary,
-    )
+    if not primary_ssos or not compare_ssos:
+        _render_power_recovery_comparison(
+            primary_name,
+            primary_events,
+            primary_summary,
+            compare_name,
+            compare_events,
+            compare_summary,
+        )
 
     primary_params = _extract_final_parameters(primary_design_state)
     compare_params = _extract_final_parameters(compare_design_state)
