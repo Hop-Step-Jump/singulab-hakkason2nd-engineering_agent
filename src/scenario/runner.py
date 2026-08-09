@@ -71,6 +71,39 @@ def load_agents_config(name: str, scenario_config: Dict[str, Any]) -> Optional[D
     return merged
 
 
+def write_effective_configs(
+    run_dir: Path,
+    *,
+    scenario_config: Dict[str, Any],
+    agents_config: Optional[Dict[str, Any]] = None,
+) -> Dict[str, str]:
+    """Persist the YAML configs actually used for a run (after overrides / apply).
+
+    Writes ``scenario_config.yaml`` always, and ``agents_config.yaml`` when agents
+    are enabled. Returns a map of logical name → absolute path string for
+    ``summary.json``.
+    """
+    run_dir = Path(run_dir)
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    scenario_path = run_dir / "scenario_config.yaml"
+    scenario_path.write_text(
+        yaml.safe_dump(scenario_config, sort_keys=False, allow_unicode=True),
+        encoding="utf-8",
+    )
+    paths: Dict[str, str] = {"scenario_config_path": str(scenario_path)}
+
+    if agents_config is not None:
+        agents_path = run_dir / "agents_config.yaml"
+        agents_path.write_text(
+            yaml.safe_dump(agents_config, sort_keys=False, allow_unicode=True),
+            encoding="utf-8",
+        )
+        paths["agents_config_path"] = str(agents_path)
+
+    return paths
+
+
 def _deep_merge(base: Dict[str, Any], overrides: Dict[str, Any]) -> Dict[str, Any]:
     result = dict(base)
     for key, value in overrides.items():

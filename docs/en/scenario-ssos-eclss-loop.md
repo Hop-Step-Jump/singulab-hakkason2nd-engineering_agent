@@ -251,6 +251,8 @@ Inside container directly: `ea-loop --agents-mode labeled_rule_base` (default `O
 
 ### Apply prior run design proposals to next run
 
+`--apply-proposals` merges into the **in-memory** config **before simulation starts**; on-disk `scenario.yaml` / `agents.yaml` are not rewritten. The effective configs are written to `scenario_config.yaml` / `agents_config.yaml` in the run directory.
+
 ```bash
 python -m scenario.ssos_eclss_loop.scenario_run --backend mock --agents-mode llm \
   --apply-proposals src/experiments/results/ssos_eclss_loop_llm/design_proposals.json
@@ -276,6 +278,8 @@ python -m scenario.ssos_eclss_loop.scenario_run --backend mock --agents-mode llm
 | `events.jsonl` | `operational_applied` / `operational_rejected` |
 | `design_state.jsonl` | `ssos_graph` snapshot each step (includes rewires) |
 | `design_proposals.json` | Post-run permanent `ssos_graph` proposals (written only when `changes` is non-empty) |
+| `scenario_config.yaml` | Effective scenario config (after overrides / `--apply-proposals`) |
+| `agents_config.yaml` | Effective agents config (when mode ≠ none) |
 | `summary.json` | Peak CO₂, operational count, backend kind, etc. |
 | `provenance.jsonl` | Operational records (`record_type: operational`) |
 

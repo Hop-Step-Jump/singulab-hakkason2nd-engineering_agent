@@ -9,15 +9,44 @@ from environment.protocol import HealthStatus
 from environment.ssos.eclss.types import EclssTelemetrySnapshot
 
 
+HEALTH_INPUT_FIELDS = {
+    "co2": "telemetry.co2_storage_kg",
+    "o2": "telemetry.o2_storage_kg",
+    "water": "telemetry.product_water_reserve_l",
+}
+
+
+def build_effective_thresholds(thresholds: Dict[str, Any]) -> Dict[str, Any]:
+    """Thresholds actually used by ``compute_eclss_storage_health`` for a run."""
+    co2_high = float(thresholds.get("co2_storage_high_kg", 1.5))
+    co2_critical = float(thresholds.get("co2_storage_critical_kg", 2.2))
+    o2_low = float(thresholds.get("o2_storage_low_kg", 0.45))
+    water_low = float(thresholds.get("product_water_low_l", 50.0))
+    return {
+        "co2_storage_high_kg": co2_high,
+        "co2_storage_critical_kg": co2_critical,
+        "o2_storage_low_kg": o2_low,
+        "o2_storage_critical_kg": o2_low * 0.75,
+        "product_water_low_l": water_low,
+        "product_water_critical_l": water_low * 0.5,
+    }
+
+
+def health_inputs_note() -> Dict[str, str]:
+    """Document which telemetry fields health assessment reads."""
+    return dict(HEALTH_INPUT_FIELDS)
+
+
 def compute_eclss_storage_health(
     step: int,
     snap: EclssTelemetrySnapshot,
     thresholds: Dict[str, Any],
 ) -> Dict[str, Any]:
-    co2_high = float(thresholds.get("co2_storage_high_kg", 1.5))
-    co2_critical = float(thresholds.get("co2_storage_critical_kg", 2.2))
-    o2_low = float(thresholds.get("o2_storage_low_kg", 0.45))
-    water_low = float(thresholds.get("product_water_low_l", 50.0))
+    effective = build_effective_thresholds(thresholds)
+    co2_high = effective["co2_storage_high_kg"]
+    co2_critical = effective["co2_storage_critical_kg"]
+    o2_low = effective["o2_storage_low_kg"]
+    water_low = effective["product_water_low_l"]
 
     co2_status = _co2_status(snap.co2_storage_kg, co2_high, co2_critical)
     o2_status = _o2_status(snap.o2_storage_kg, o2_low)

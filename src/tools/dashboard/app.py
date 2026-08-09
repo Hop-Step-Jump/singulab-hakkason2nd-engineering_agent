@@ -174,7 +174,7 @@ def _build_line_plot_figure(
 def _line_plot(
     telemetry_rows: List[Dict[str, Any]],
     eps_rows: List[Dict[str, Any]],
-    current_step: int,
+    current_step: Optional[int] = None,
 ) -> None:
     fig = _build_line_plot_figure(
         telemetry_rows,
@@ -253,8 +253,13 @@ def _event_timeline_label(event: Dict[str, Any]) -> str:
     return kind
 
 
-_REPLAY_TIMELINE_HEIGHT = 520
-_REPLAY_FEED_HEIGHT = 300
+_REPLAY_TIMELINE_HEIGHT = 560
+_REPLAY_FEED_HEIGHT = 250
+_REPLAY_FIXED_STATUS = 250
+_REPLAY_FIXED_PLOT = 430
+_REPLAY_FIXED_SCHEMATIC = 470
+_REPLAY_FIXED_OPERATORS = 360
+_REPLAY_FIXED_OPS = 300
 
 
 def _step_visual_state(step: int, current_step: int) -> Tuple[float, str, str, str]:
@@ -414,9 +419,14 @@ def _render_agent_scroll_feed(
         for row in rows:
             role = _escape_html(row.get("from_role", "?"))
             msg_type = _escape_html(row.get("message_type", "") or "")
+            source = _escape_html(row.get("decision_source", "") or "")
+            phase = _escape_html(row.get("deliberation_phase", "") or "")
             body = _escape_html(str(row.get(field, "") or "").strip() or "—")
+            meta_bits = [bit for bit in (msg_type, source, phase) if bit]
             type_suffix = (
-                f" <span style='color:#9aa0a6;'>({msg_type})</span>" if msg_type else ""
+                f" <span style='color:#9aa0a6;'>({' · '.join(meta_bits)})</span>"
+                if meta_bits
+                else ""
             )
             blocks.append(
                 "<div style='margin:0 0 3px 8px;color:#e8e8e8;'>"
@@ -435,67 +445,251 @@ def _render_agent_scroll_feed(
     )
 
 
-def _init_replay_state(run_name: str, max_step: int) -> None:
-    if st.session_state.get("replay_run_name") != run_name:
-        st.session_state.replay_run_name = run_name
-        st.session_state.replay_step = 1
-    st.session_state.replay_step = min(
-        max(int(st.session_state.get("replay_step", 1)), 1),
+def _init_step_state(run_name: str, *, run_key: str, step_key: str, default_step: int, max_step: int) -> None:
+    if st.session_state.get(run_key) != run_name:
+        st.session_state[run_key] = run_name
+        st.session_state[step_key] = default_step
+    st.session_state[step_key] = min(
+        max(int(st.session_state.get(step_key, default_step)), 1),
         max_step,
     )
 
 
-def _replay_step_controls(max_step: int) -> int:
-    if "replay_step" not in st.session_state:
-        st.session_state.replay_step = 1
+def _should_show_step_slider(max_step: int) -> bool:
+    """Streamlit sliders require min_value < max_value; omit when only one step."""
+    return int(max_step) > 1
 
-    control_cols = st.columns([5, 1])
-    with control_cols[1]:
-        if st.button("Reset", key="replay_reset_btn"):
-            st.session_state.replay_step = 1
 
-    with control_cols[0]:
-        st.session_state.replay_step = st.slider(
-            "Replay step",
-            min_value=1,
-            max_value=max_step,
-            value=int(st.session_state.replay_step),
+def _bind_arrow_key_step_nav(*, prev_key: str, next_key: str) -> None:
+    """Left/Right arrows click Prev/Next via Streamlit ``st-key-*`` widget classes."""
+    components.html(
+        f"""
+<script>
+(() => {{
+  const doc = window.parent.document;
+  const handlerKey = '__ea_arrow_step_nav_handler';
+  const shouldIgnoreTarget = (target) => {{
+    if (!target || !(target instanceof Element)) return false;
+    const tag = (target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select' || target.isContentEditable) {{
+      return true;
+    }}
+    // Sidebar widgets (run selectbox, etc.) use custom elements, not native inputs.
+    if (target.closest('[data-testid="stSidebar"]')) {{
+      return true;
+    }}
+    // Other Streamlit controls that consume arrow keys (selectbox, slider, popovers).
+    if (target.closest(
+      '[role="combobox"], [role="listbox"], [role="option"], [role="slider"], ' +
+      '[data-testid="stSelectbox"], [data-testid="stSlider"], [data-baseweb="select"], [data-baseweb="popover"]'
+    )) {{
+      return true;
+    }}
+    return false;
+  }};
+  const buttonForKey = (widgetKey) => {{
+    const host = doc.querySelector('.st-key-' + widgetKey);
+    if (!host) return null;
+    return host.querySelector('button');
+  }};
+  if (doc[handlerKey]) {{
+    doc.removeEventListener('keydown', doc[handlerKey]);
+  }}
+  doc[handlerKey] = (event) => {{
+    if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
+    if (shouldIgnoreTarget(event.target)) return;
+    let widgetKey = null;
+    if (event.key === 'ArrowLeft') widgetKey = {prev_key!r};
+    else if (event.key === 'ArrowRight') widgetKey = {next_key!r};
+    else return;
+    const button = buttonForKey(widgetKey);
+    if (!button || button.disabled) return;
+    event.preventDefault();
+    button.click();
+  }};
+  doc.addEventListener('keydown', doc[handlerKey]);
+}})();
+</script>
+""",
+        height=0,
+    )
+
+
+def _step_nav_controls(
+    *,
+    step_key: str,
+    max_step: int,
+    slider_label: str,
+    key_prefix: str,
+    reset_to: int = 1,
+) -> int:
+    """Slider plus Previous / Next / Reset; Left/Right arrows mirror the buttons."""
+    max_step = max(int(max_step), 1)
+    if step_key not in st.session_state:
+        st.session_state[step_key] = reset_to
+    st.session_state[step_key] = min(max(int(st.session_state[step_key]), 1), max_step)
+
+    prev_label = "◀ Previous"
+    next_label = "Next ▶"
+    prev_key = f"{key_prefix}_prev"
+    next_key = f"{key_prefix}_next"
+    cols = st.columns([1.1, 1.1, 5.2, 1.0])
+    with cols[0]:
+        prev_clicked = st.button(
+            prev_label,
+            key=prev_key,
+            disabled=int(st.session_state[step_key]) <= 1,
+            use_container_width=True,
+        )
+    with cols[1]:
+        next_clicked = st.button(
+            next_label,
+            key=next_key,
+            disabled=int(st.session_state[step_key]) >= max_step,
+            use_container_width=True,
+        )
+    with cols[3]:
+        reset_clicked = st.button("Reset", key=f"{key_prefix}_reset", use_container_width=True)
+
+    if prev_clicked:
+        st.session_state[step_key] = max(1, int(st.session_state[step_key]) - 1)
+    if next_clicked:
+        st.session_state[step_key] = min(max_step, int(st.session_state[step_key]) + 1)
+    if reset_clicked:
+        st.session_state[step_key] = min(max(reset_to, 1), max_step)
+
+    with cols[2]:
+        if _should_show_step_slider(max_step):
+            st.session_state[step_key] = st.slider(
+                slider_label,
+                min_value=1,
+                max_value=max_step,
+                value=int(st.session_state[step_key]),
+            )
+        else:
+            st.session_state[step_key] = 1
+            st.caption(f"{slider_label}: 1 (single-step run)")
+
+    _bind_arrow_key_step_nav(prev_key=prev_key, next_key=next_key)
+    st.caption("Tip: use ◀ Previous / Next ▶ or Left / Right arrow keys to move one step.")
+    return int(st.session_state[step_key])
+
+
+def _fixed_replay_panel(height: int):
+    """Fixed-height bordered panel so section headings stay aligned across steps."""
+    return st.container(height=height, border=True)
+
+
+def _render_ssos_replay_detail_grid(run: RunViewData, current_step: int) -> None:
+    """SSOS replay detail: full-width status stack, then paired plot/schematic rows."""
+    ssos_views.render_ssos_summary_highlights(run.summary)
+
+    with _fixed_replay_panel(_REPLAY_FIXED_STATUS):
+        ssos_views.render_ssos_status_strip(
+            run.summary, run.health, run.telemetry, current_step
         )
 
-    return int(st.session_state.replay_step)
+    with _fixed_replay_panel(_REPLAY_FIXED_STATUS):
+        st.subheader("Health bands")
+        ssos_views.render_ssos_health_card(run.telemetry, run.health, current_step)
+
+    with _fixed_replay_panel(_REPLAY_FIXED_STATUS):
+        ssos_views.render_anomaly_status_panel(
+            step=current_step,
+            telemetry_rows=run.telemetry,
+            health_rows=run.health,
+            events=run.events,
+            summary=run.summary,
+            table_height=140,
+        )
+
+    left_col, right_col = st.columns(2, gap="medium")
+    with left_col:
+        with _fixed_replay_panel(_REPLAY_FIXED_PLOT):
+            ssos_views.render_ssos_storage_plot(
+                run.telemetry, summary=run.summary, highlight_step=current_step
+            )
+    with right_col:
+        with _fixed_replay_panel(_REPLAY_FIXED_PLOT):
+            ssos_views.render_plant_sim_panel(
+                run.telemetry, highlight_step=current_step, show_empty=True
+            )
+
+    left_col, right_col = st.columns(2, gap="medium")
+    with left_col:
+        with _fixed_replay_panel(_REPLAY_FIXED_SCHEMATIC):
+            ssos_views.render_ssos_schematic(
+                step=current_step, telemetry_rows=run.telemetry, events=run.events
+            )
+    with right_col:
+        with _fixed_replay_panel(_REPLAY_FIXED_SCHEMATIC):
+            ssos_views.render_ssos_flow_detail(
+                step=current_step,
+                telemetry_rows=run.telemetry,
+                events=run.events,
+                table_height=280,
+            )
 
 
-def _render_ssos_center_panel(run: RunViewData, current_step: int) -> None:
-    ssos_views.render_ssos_summary_highlights(run.summary)
-    ssos_views.render_ssos_health_card(run.telemetry, run.health, current_step)
-    ssos_views.render_ssos_storage_plot(run.telemetry, highlight_step=current_step)
-    ssos_views.render_plant_sim_panel(run.telemetry, highlight_step=current_step)
-    st.subheader("Operational commands")
-    ssos_views.render_ssos_operational_timeline(run.events)
+def _render_ssos_replay_variable_tail(run: RunViewData, current_step: int) -> None:
+    """Fixed-height operator/ops panels, then design proposals as a headed section."""
+    st.divider()
+    with _fixed_replay_panel(_REPLAY_FIXED_OPERATORS):
+        ssos_views.render_operator_step_panel(
+            step=current_step,
+            messages=run.messages,
+            events=run.events,
+            summary=run.summary,
+        )
+    with _fixed_replay_panel(_REPLAY_FIXED_OPS):
+        ssos_views.render_ssos_operational_timeline(run.events, table_height=220)
+    ssos_views.render_ssos_design_proposals(run.run_dir, summary=run.summary)
+
+
+def _render_scrubber_replay_detail_grid(run: RunViewData, current_step: int) -> None:
+    with _fixed_replay_panel(_REPLAY_FIXED_STATUS):
+        st.subheader("Status")
+        _render_health_card(run.telemetry, run.health, run.eps_telemetry, current_step)
+
+    with _fixed_replay_panel(_REPLAY_FIXED_STATUS):
+        ssos_views.render_anomaly_status_panel(
+            step=current_step,
+            telemetry_rows=run.telemetry,
+            health_rows=run.health,
+            events=run.events,
+            summary=run.summary,
+            table_height=140,
+        )
+
+    with _fixed_replay_panel(_REPLAY_FIXED_PLOT):
+        st.subheader("Trajectories")
+        _render_static_replay_plot(run, current_step)
 
 
 def _render_run_replay_view(run: RunViewData) -> None:
-    """Per-run step replay: timeline, plots, and agent discourse."""
+    """Per-run step replay: discourse row, then fixed detail grid, then variable tail."""
     max_step = _max_telemetry_step(run.telemetry)
-    _init_replay_state(run.run_name, max_step)
-    st.session_state.replay_run_name = run.run_name
+    _init_step_state(
+        run.run_name,
+        run_key="replay_run_name",
+        step_key="replay_step",
+        default_step=1,
+        max_step=max_step,
+    )
 
     st.markdown(f"**`{run.run_name}`** — step-by-step replay")
     st.caption(f"`{run.run_dir}`")
-    current_step = _replay_step_controls(max_step)
+    current_step = _step_nav_controls(
+        step_key="replay_step",
+        max_step=max_step,
+        slider_label="Replay step",
+        key_prefix="replay",
+        reset_to=1,
+    )
 
-    left_col, center_col, right_col = st.columns([1, 2.2, 1.3], gap="medium")
-
+    left_col, right_col = st.columns([1.05, 1.05], gap="medium")
     with left_col:
         _render_event_timeline(run.events, current_step)
-
-    with center_col:
-        if ssos_views.is_ssos_eclss_loop(run.summary):
-            _render_ssos_center_panel(run, current_step)
-        else:
-            _render_health_card(run.telemetry, run.health, run.eps_telemetry, current_step)
-            _render_static_replay_plot(run, current_step)
-
     with right_col:
         _render_agent_scroll_feed(
             run.messages,
@@ -504,6 +698,7 @@ def _render_run_replay_view(run: RunViewData) -> None:
             title="Agent messages",
             empty_caption="No agent messages through this step.",
             anchor_prefix="msg",
+            height_px=_REPLAY_FEED_HEIGHT,
         )
         _render_agent_scroll_feed(
             run.messages,
@@ -512,7 +707,24 @@ def _render_run_replay_view(run: RunViewData) -> None:
             title="Agent reasoning",
             empty_caption="No agent reasoning through this step.",
             anchor_prefix="reason",
+            height_px=_REPLAY_FEED_HEIGHT,
         )
+
+    st.divider()
+    if ssos_views.is_ssos_eclss_loop(run.summary):
+        _render_ssos_replay_detail_grid(run, current_step)
+        _render_ssos_replay_variable_tail(run, current_step)
+    else:
+        _render_scrubber_replay_detail_grid(run, current_step)
+        st.divider()
+        with _fixed_replay_panel(_REPLAY_FIXED_OPERATORS):
+            ssos_views.render_operator_step_panel(
+                step=current_step,
+                messages=run.messages,
+                events=run.events,
+                summary=run.summary,
+            )
+        _render_topology_proposal_for_run(run.run_dir, run.design_state)
 
 
 def _render_step_tables(
@@ -991,10 +1203,13 @@ def _render_topology_proposal_blurb(ctx: Optional[TopologyProposalContext], *, m
     if ctx is None:
         st.info(missing)
         return
+    st.markdown("**What observation drove these proposals?**")
     if ctx.proposal.get("message"):
-        st.markdown(f"**Proposal:** {ctx.proposal['message']}")
+        st.markdown(f"**Proposal message:** {ctx.proposal['message']}")
     if ctx.proposal.get("reasoning"):
-        st.caption(ctx.proposal["reasoning"])
+        st.markdown(f"**Proposal reasoning:** {ctx.proposal['reasoning']}")
+    if not ctx.proposal.get("message") and not ctx.proposal.get("reasoning"):
+        st.caption("No proposal message/reasoning recorded in design_proposals.json.")
 
 
 def _render_topology_proposal_metrics(ctx: Optional[TopologyProposalContext]) -> None:
@@ -1233,6 +1448,25 @@ def _render_summary(summary: Dict[str, Any]) -> None:
     st.json(summary, expanded=False)
 
 
+def _render_effective_configs(run_dir: Path) -> None:
+    st.subheader("Effective configs")
+    st.caption(
+        "YAML dumped into the run directory after CLI overrides and `--apply-proposals` "
+        "(when present)."
+    )
+    any_found = False
+    for name in ("scenario_config.yaml", "agents_config.yaml"):
+        path = run_dir / name
+        if not path.exists():
+            st.caption(f"`{name}` not found in this run directory.")
+            continue
+        any_found = True
+        with st.expander(name, expanded=False):
+            st.code(path.read_text(encoding="utf-8"), language="yaml")
+    if not any_found:
+        st.caption("No effective config YAML artifacts in this run directory.")
+
+
 def _render_health_card(
     telemetry_rows: List[Dict[str, Any]],
     health_rows: List[Dict[str, Any]],
@@ -1411,10 +1645,9 @@ def _render_paired_columns(
         render_compare()
 
 
-def _render_dual_run_views(primary: RunViewData, compare: RunViewData, current_step: int) -> None:
-    """Section-aligned side-by-side layout (avoids column height drift)."""
+def _render_dual_overview(primary: RunViewData, compare: RunViewData) -> None:
+    """Overview compare: run-level timelines/plots only (no per-step tables)."""
     st.subheader("Runs side by side")
-
     _render_paired_columns(
         lambda: (
             st.markdown(f"**`{primary.run_name}`**"),
@@ -1434,99 +1667,62 @@ def _render_dual_run_views(primary: RunViewData, compare: RunViewData, current_s
             "schemas. Each panel uses the view matching that run."
         )
 
-    def _render_health_for(run: RunViewData) -> None:
+    def _render_overview_for(run: RunViewData) -> None:
         if ssos_views.is_ssos_eclss_loop(run.summary):
-            ssos_views.render_ssos_health_card(run.telemetry, run.health, current_step)
-        else:
-            _render_health_card(run.telemetry, run.health, run.eps_telemetry, current_step)
-
-    def _render_plots_for(run: RunViewData) -> None:
+            ssos_views.render_ssos_summary_highlights(run.summary)
+        ssos_views.render_status_state_timeline(run.health)
+        ssos_views.render_anomaly_state_timeline(run.telemetry, run.events)
         if ssos_views.is_ssos_eclss_loop(run.summary):
-            ssos_views.render_ssos_storage_plot(run.telemetry, highlight_step=current_step)
-            ssos_views.render_plant_sim_panel(run.telemetry, highlight_step=current_step)
+            ssos_views.render_ssos_storage_plot(run.telemetry, summary=run.summary)
+            ssos_views.render_plant_sim_panel(run.telemetry, show_empty=True)
+            ssos_views.render_ssos_operational_timeline(run.events, table_height=180)
         else:
-            _line_plot(run.telemetry, run.eps_telemetry, current_step)
+            _line_plot(run.telemetry, run.eps_telemetry)
+        _render_summary(run.summary)
+        _render_effective_configs(run.run_dir)
+        if ssos_views.is_ssos_eclss_loop(run.summary):
+            ssos_views.render_ssos_design_proposals(run.run_dir, summary=run.summary)
+        else:
+            st.subheader("Design proposals")
+            _render_topology_proposal_for_run(run.run_dir, run.design_state)
 
     _render_paired_columns(
-        lambda: _render_health_for(primary),
-        lambda: _render_health_for(compare),
-    )
-    _render_paired_columns(
-        lambda: _render_plots_for(primary),
-        lambda: _render_plots_for(compare),
+        lambda: _render_overview_for(primary),
+        lambda: _render_overview_for(compare),
     )
 
     if not primary_ssos and not compare_ssos:
         st.subheader("Design topology — proposal comparison")
         _render_dual_topology_proposal(primary, compare)
-    elif primary_ssos or compare_ssos:
-        st.subheader("Operational commands")
-        _render_paired_columns(
-            lambda: (
-                ssos_views.render_ssos_operational_timeline(primary.events)
-                if primary_ssos
-                else st.caption("Scrubber run — no SSOS operational timeline.")
-            ),
-            lambda: (
-                ssos_views.render_ssos_operational_timeline(compare.events)
-                if compare_ssos
-                else st.caption("Scrubber run — no SSOS operational timeline.")
-            ),
-        )
-
-    st.subheader(f"Step {current_step} detail")
-    primary_messages = _select_rows_at_step(primary.messages, current_step)
-    compare_messages = _select_rows_at_step(compare.messages, current_step)
-    primary_events = _select_rows_at_step(primary.events, current_step)
-    compare_events = _select_rows_at_step(compare.events, current_step)
-    primary_provenance = _select_rows_at_step(primary.provenance, current_step)
-    compare_provenance = _select_rows_at_step(compare.provenance, current_step)
-
-    st.markdown("**Messages**")
-    _render_paired_columns(
-        lambda: _render_dataframe_or_empty(primary_messages, "No messages at this step."),
-        lambda: _render_dataframe_or_empty(compare_messages, "No messages at this step."),
-    )
-
-    st.markdown("**Events**")
-    _render_paired_columns(
-        lambda: _render_dataframe_or_empty(primary_events, "No events at this step."),
-        lambda: _render_dataframe_or_empty(compare_events, "No events at this step."),
-    )
-
-    st.markdown("**Provenance**")
-    _render_paired_columns(
-        lambda: _render_dataframe_or_empty(primary_provenance, "No provenance records at this step."),
-        lambda: _render_dataframe_or_empty(compare_provenance, "No provenance records at this step."),
-    )
-
-    st.subheader("Run summary")
-    _render_paired_columns(
-        lambda: st.json(primary.summary, expanded=False) if primary.summary else st.warning("summary.json not found."),
-        lambda: st.json(compare.summary, expanded=False) if compare.summary else st.warning("summary.json not found."),
-    )
 
 
-def _render_run_detail_view(run: RunViewData, current_step: int) -> None:
-    """Health, trajectories, topology, step tables, and summary for a single run."""
+def _render_run_detail_view(run: RunViewData) -> None:
+    """Overview: run-level timelines, trajectories, summary, configs, design proposals."""
     st.markdown(f"**`{run.run_name}`**")
     st.caption(f"`{run.run_dir}`")
     if ssos_views.is_ssos_eclss_loop(run.summary):
         ssos_views.render_ssos_summary_highlights(run.summary)
-        ssos_views.render_ssos_health_card(run.telemetry, run.health, current_step)
-        ssos_views.render_ssos_storage_plot(run.telemetry, highlight_step=current_step)
-        ssos_views.render_plant_sim_panel(run.telemetry, highlight_step=current_step)
-        st.subheader("Operational commands")
-        ssos_views.render_ssos_operational_timeline(run.events)
-        ssos_views.render_ssos_design_proposals(run.run_dir)
-        _render_step_tables(run.messages, run.events, run.provenance, current_step)
+        ssos_views.render_status_state_timeline(run.health)
+        ssos_views.render_anomaly_state_timeline(run.telemetry, run.events)
+        left_col, right_col = st.columns(2, gap="medium")
+        with left_col:
+            ssos_views.render_ssos_storage_plot(run.telemetry, summary=run.summary)
+        with right_col:
+            ssos_views.render_plant_sim_panel(run.telemetry, show_empty=True)
+        with _fixed_replay_panel(_REPLAY_FIXED_OPS):
+            ssos_views.render_ssos_operational_timeline(run.events, table_height=220)
         _render_summary(run.summary)
+        _render_effective_configs(run.run_dir)
+        ssos_views.render_ssos_design_proposals(run.run_dir, summary=run.summary)
         return
-    _render_health_card(run.telemetry, run.health, run.eps_telemetry, current_step)
-    _line_plot(run.telemetry, run.eps_telemetry, current_step)
-    _render_topology_proposal_comparison(run.run_dir, run.design_state)
-    _render_step_tables(run.messages, run.events, run.provenance, current_step)
+
+    ssos_views.render_status_state_timeline(run.health)
+    ssos_views.render_anomaly_state_timeline(run.telemetry, run.events)
+    _line_plot(run.telemetry, run.eps_telemetry)
     _render_summary(run.summary)
+    _render_effective_configs(run.run_dir)
+    st.subheader("Design proposals")
+    _render_topology_proposal_for_run(run.run_dir, run.design_state)
 
 
 def _render_run_comparison(
@@ -1703,14 +1899,24 @@ def main() -> None:
     selected_run_name = st.sidebar.selectbox("Run", options=run_names, index=len(run_names) - 1)
     run_dir = run_map[selected_run_name]
 
-    compare_enabled = st.sidebar.checkbox("Compare with another run", value=False)
+    view_mode = st.radio(
+        "View",
+        options=["Overview", "Step replay"],
+        horizontal=True,
+        key="dashboard_view_mode",
+    )
+
     compare_run_name = None
     compare_run_dir = None
-    if compare_enabled:
-        compare_candidates = [name for name in run_names if name != selected_run_name]
-        if compare_candidates:
-            compare_run_name = st.sidebar.selectbox("Compare run", options=compare_candidates, index=0)
-            compare_run_dir = run_map[compare_run_name]
+    if view_mode == "Overview":
+        compare_enabled = st.sidebar.checkbox("Compare with another run", value=False)
+        if compare_enabled:
+            compare_candidates = [name for name in run_names if name != selected_run_name]
+            if compare_candidates:
+                compare_run_name = st.sidebar.selectbox(
+                    "Compare run", options=compare_candidates, index=0
+                )
+                compare_run_dir = run_map[compare_run_name]
 
     telemetry = _read_jsonl(run_dir / "telemetry.jsonl")
     eps_telemetry = _read_jsonl(run_dir / "eps_telemetry.jsonl")
@@ -1739,20 +1945,6 @@ def main() -> None:
         compare_design_state = _read_jsonl(compare_run_dir / "design_state.jsonl")
         compare_summary = _read_json(compare_run_dir / "summary.json")
 
-    max_step = _max_telemetry_step(telemetry)
-    if max_step < 1 and telemetry:
-        max_step = max(int(r.get("step", 0)) for r in telemetry)
-    if max_step < 1:
-        max_step = 1
-    if compare_run_name and compare_telemetry:
-        max_step = min(max_step, _max_telemetry_step(compare_telemetry))
-    overview_step = st.sidebar.slider(
-        "Step (overview)",
-        min_value=1,
-        max_value=max_step,
-        value=max_step,
-    )
-
     primary_run = RunViewData(
         run_dir=run_dir,
         run_name=selected_run_name,
@@ -1766,16 +1958,11 @@ def main() -> None:
         summary=summary,
     )
 
-    view_mode = st.radio(
-        "View",
-        options=["Overview", "Step replay"],
-        horizontal=True,
-        key="dashboard_view_mode",
-    )
-
     if view_mode == "Step replay":
         _render_run_replay_view(primary_run)
-    elif compare_run_name and compare_run_dir:
+        return
+
+    if compare_run_name and compare_run_dir:
         compare_run = RunViewData(
             run_dir=compare_run_dir,
             run_name=compare_run_name,
@@ -1788,7 +1975,7 @@ def main() -> None:
             design_state=compare_design_state,
             summary=compare_summary,
         )
-        _render_dual_run_views(primary_run, compare_run, overview_step)
+        _render_dual_overview(primary_run, compare_run)
         st.divider()
         _render_run_comparison(
             primary_name=selected_run_name,
@@ -1803,7 +1990,7 @@ def main() -> None:
             compare_events=compare_events,
         )
     else:
-        _render_run_detail_view(primary_run, overview_step)
+        _render_run_detail_view(primary_run)
 
 
 if __name__ == "__main__":

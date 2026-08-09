@@ -38,6 +38,9 @@ def test_scrubber_degradation_baseline_runs(tmp_path: Path):
     assert summary["peak_co2_ppm"] > CO2_SAFE_PPM, "CO2 should exceed safe band for demo narrative"
     assert summary["anomaly_seen"] is True
     assert summary["co2_above_threshold_step"] is not None
+    assert (run_dir / "scenario_config.yaml").exists()
+    assert summary["scenario_config_path"] == str(run_dir / "scenario_config.yaml")
+    assert "agents_config_path" not in summary  # baseline mode is none
     assert summary["co2_above_threshold_step"] >= 20
 
     assert any("scrubber_degradation" in str(e) for e in events) or len(anomaly_steps) > 0

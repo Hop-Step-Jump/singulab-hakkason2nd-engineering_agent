@@ -34,6 +34,8 @@ Files present in both tracks:
 | `events.jsonl` | Runtime events (`kind` differs) |
 | `design_state.jsonl` | Design snapshot at step start |
 | `design_proposals.json` | Post-run permanent proposals (**`change_kind` differs**) |
+| `scenario_config.yaml` | Effective scenario config used for the run (after CLI overrides and `--apply-proposals`) |
+| `agents_config.yaml` | Effective agents config used for the run (when `agents.mode` ≠ `none`) |
 | `summary.json` | Run summary |
 | `provenance.jsonl` | One Piece compatible lineage ([one-piece-integration.md](one-piece-integration.md)) |
 
@@ -522,8 +524,10 @@ Every step, **before** agent action. Snapshot of `ssos_graph` (includes `rewires
 }
 ```
 
-**Fields not in scrubber**: `backend`, `peak_co2_storage_kg`, `operational_command_count`, etc.  
+**Fields not in scrubber**: `backend`, `peak_co2_storage_kg`, `operational_command_count`, `scenario_config_path`, `agents_config_path`, `apply_proposals_path`, etc.  
 **Fields not in ssos**: `co2_ppm`, `eps_boost_applied_step`, entire `eps_telemetry.jsonl`.
+
+`scenario_config_path` / `agents_config_path` point at the effective YAML dumps under the run directory. `apply_proposals_path` is present only when `--apply-proposals` was used.
 
 ### ROS2 topics (SSOS live ECLSS)
 

@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+import pytest
+
 from environment.protocol import HealthStatus
 from environment.ssos.eclss.types import EclssTelemetrySnapshot
-from scenario.ssos_eclss_loop.health import compute_eclss_storage_health
+from scenario.ssos_eclss_loop.health import (
+    build_effective_thresholds,
+    compute_eclss_storage_health,
+    health_inputs_note,
+)
 from scenario.ssos_eclss_loop.scenario_run import (
     _assert_ros2_storage_telemetry,
     _omit_nulls,
@@ -12,6 +18,20 @@ from scenario.ssos_eclss_loop.scenario_run import (
     _telemetry_summary_fields,
     _wait_for_ros2_storage_telemetry,
 )
+
+
+def test_build_effective_thresholds_includes_derived_criticals():
+    effective = build_effective_thresholds(
+        {
+            "co2_storage_high_kg": 1.6,
+            "co2_storage_critical_kg": 2.3,
+            "o2_storage_low_kg": 0.4,
+            "product_water_low_l": 40.0,
+        }
+    )
+    assert effective["o2_storage_critical_kg"] == pytest.approx(0.3)
+    assert effective["product_water_critical_l"] == pytest.approx(20.0)
+    assert "co2" in health_inputs_note()
 
 
 def test_health_unknown_when_telemetry_missing():

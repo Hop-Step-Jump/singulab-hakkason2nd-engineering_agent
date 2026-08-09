@@ -33,6 +33,8 @@
 | `events.jsonl` | ランタイムイベント（`kind` が系統で異なる） |
 | `design_state.jsonl` | 各 step 開始時点の設計スナップショット |
 | `design_proposals.json` | ラン終了後の恒久提案（**change_kind が系統で異なる**） |
+| `scenario_config.yaml` | この run で実際に使われたシナリオ設定（CLI overrides / `--apply-proposals` 適用後） |
+| `agents_config.yaml` | この run で実際に使われたエージェント設定（`agents.mode` ≠ `none` のとき） |
 | `summary.json` | 実行サマリ |
 | `provenance.jsonl` | One Piece 互換来歴（[one-piece-integration.md](one-piece-integration.md)） |
 
@@ -519,8 +521,10 @@ ops 後に health を更新する場合、`telemetry.jsonl` と同様に `"post_
 }
 ```
 
-**scrubber に無いフィールド**: `backend`、`peak_co2_storage_kg`、`operational_command_count` 等。  
+**scrubber に無いフィールド**: `backend`、`peak_co2_storage_kg`、`operational_command_count`、`scenario_config_path`、`agents_config_path`、`apply_proposals_path` 等。  
 **ssos に無いフィールド**: `co2_ppm`、`eps_boost_applied_step`、`eps_telemetry.jsonl` 全体。
+
+`scenario_config_path` / `agents_config_path` は run ディレクトリ内の実効 YAML ダンプを指す。`apply_proposals_path` は `--apply-proposals` 使用時のみ。
 
 ### ROS2 トピック（SSOS 実 ECLSS）
 

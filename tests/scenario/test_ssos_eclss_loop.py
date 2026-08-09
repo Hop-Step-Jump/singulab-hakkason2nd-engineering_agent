@@ -79,6 +79,9 @@ def test_ssos_eclss_loop_labeled_agents_invoke_ars(tmp_path: Path):
     telemetry = _read_jsonl(run_dir / "telemetry.jsonl")
 
     assert summary["agents_mode"] == "labeled_rule_base"
+    assert "thresholds" in summary
+    assert summary["thresholds"]["co2_storage_high_kg"] == pytest.approx(1.5)
+    assert "health_inputs" in summary
     assert summary["team_count"] == 3
     assert summary["agent_ids"] == [
         "eclss_operator_1",
@@ -185,6 +188,29 @@ def test_ssos_eclss_loop_apply_proposals(tmp_path: Path):
     )
     summary = json.loads((second / "summary.json").read_text(encoding="utf-8"))
     assert summary["operational_command_count"] >= 1
+    assert summary["apply_proposals_path"] == str(proposals_path)
+    assert (second / "scenario_config.yaml").exists()
+    assert (second / "agents_config.yaml").exists()
+
+    import yaml
+
+    proposals = json.loads(proposals_path.read_text(encoding="utf-8"))
+    effective_agents = yaml.safe_load((second / "agents_config.yaml").read_text(encoding="utf-8"))
+    effective_scenario = yaml.safe_load((second / "scenario_config.yaml").read_text(encoding="utf-8"))
+    assert effective_scenario.get("agents", {}).get("mode") == "labeled_rule_base"
+
+    # At least one applied change must appear in the dumped effective agents policy.
+    applied_kinds = {c["change_kind"] for c in proposals.get("changes", [])}
+    policy = effective_agents.get("policy") or {}
+    if "action_profile" in applied_kinds:
+        assert "ars_goal" in policy or "ogs_goal" in policy or "wrs_goal" in policy
+    if "service_config" in applied_kinds:
+        assert "request_co2_amount" in policy or "request_o2_amount" in policy
+    if "set_parameter" in applied_kinds:
+        # set_parameter may land in scenario thresholds and/or agents.policy
+        assert "thresholds" in effective_scenario or any(
+            k.endswith("_kg") or k.endswith("_l") for k in policy
+        )
 
 
 def test_ssos_eclss_loop_labeled_agents_ogs_when_o2_low(tmp_path: Path):
@@ -217,6 +243,23 @@ def test_resolve_backend_kind_from_env(monkeypatch):
     config = {"backend": {"kind": "mock"}}
     monkeypatch.setenv(BACKEND_ENV_VAR, "ros2")
     assert resolve_backend_kind(config) == "ros2"
+
+
+def test_effective_config_records_env_resolved_backend(tmp_path: Path, monkeypatch):
+    """scenario_config.yaml must match the backend actually used (not stale YAML)."""
+    import yaml
+
+    monkeypatch.setenv(BACKEND_ENV_VAR, "plant_sim")
+    run_dir = run_scenario(
+        "ssos_eclss_loop",
+        output_dir=tmp_path / "env_backend",
+        overrides={"simulation": {"steps": 2}},
+        recreate_output=True,
+    )
+    summary = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
+    effective = yaml.safe_load((run_dir / "scenario_config.yaml").read_text(encoding="utf-8"))
+    assert summary["backend"] == "plant_sim"
+    assert effective["backend"]["kind"] == "plant_sim"
 
 
 def test_resolve_backend_kind_override_wins(monkeypatch):
@@ -348,4 +391,42 @@ def test_ssos_eclss_loop_skips_empty_design_proposals_file(tmp_path: Path, monke
     assert summary.get("design_proposal_count") == 0
     assert "design_proposals_path" not in summary
     assert not (run_dir / "design_proposals.json").exists()
+
+
+def test_ssos_eclss_loop_plant_sim_writes_thresholds_and_metabolism(tmp_path: Path):
+    run_dir = run_scenario(
+        "ssos_eclss_loop",
+        output_dir=tmp_path / "plant_sim",
+        overrides={
+            "backend": {"kind": "plant_sim"},
+            "agents": {"mode": "labeled_rule_base"},
+            "simulation": {"steps": 3},
+        },
+        recreate_output=True,
+    )
+    summary = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
+    telemetry = _read_jsonl(run_dir / "telemetry.jsonl")
+
+    assert summary["backend"] == "plant_sim"
+    assert "thresholds" in summary
+    assert summary["thresholds"]["o2_storage_critical_kg"] == pytest.approx(
+        summary["thresholds"]["o2_storage_low_kg"] * 0.75
+    )
+
+    metabolism_rows = [
+        row
+        for row in telemetry
+        if isinstance((row.get("raw_topics") or {}).get("plant_sim"), dict)
+        and "last_metabolism" in (row["raw_topics"]["plant_sim"])
+        and row.get("post_ops") is not True
+    ]
+    assert len(metabolism_rows) == 2  # steps 2 and 3 (advance before poll)
+
+    proposals_path = run_dir / "design_proposals.json"
+    if proposals_path.exists():
+        proposals = json.loads(proposals_path.read_text(encoding="utf-8"))
+        for change in proposals.get("changes", []):
+            assert change.get("why")
+            assert change.get("what")
+            assert change.get("how")
 

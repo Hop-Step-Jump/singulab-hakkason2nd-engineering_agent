@@ -208,19 +208,67 @@ def _append_threshold_bump(
     target_policy: str,
     target_thresholds: str,
     value: float,
+    why: str,
+    what: str,
+    how: str,
 ) -> None:
-    changes.append(
-        {
-            "change_kind": "set_parameter",
-            "payload": {"target": target_policy, "value": value},
-        }
-    )
-    changes.append(
-        {
-            "change_kind": "set_parameter",
-            "payload": {"target": target_thresholds, "value": value},
-        }
-    )
+    for target in (target_policy, target_thresholds):
+        changes.append(
+            {
+                "change_kind": "set_parameter",
+                "payload": {"target": target, "value": value},
+                "why": why,
+                "what": what,
+                "how": how,
+            }
+        )
+
+
+def _annotate_change(
+    change: Dict[str, Any],
+    *,
+    why: str,
+    what: str,
+    how: str,
+) -> Dict[str, Any]:
+    annotated = dict(change)
+    annotated["why"] = why
+    annotated["what"] = what
+    annotated["how"] = how
+    return annotated
+
+
+def _co2_stress_why(
+    *,
+    final_health: Dict[str, Any],
+    final_co2: Any,
+    peak_co2: Any,
+    co2_high: float,
+) -> str:
+    parts: List[str] = []
+    status = str(final_health.get("co2_status", "")).lower()
+    if status in {"warning", "critical"}:
+        parts.append(f"final co2_status={status}")
+    if final_co2 is not None and float(final_co2) >= co2_high:
+        parts.append(f"final_co2_storage_kg={float(final_co2):.3g} >= co2_storage_high_kg={co2_high}")
+    if peak_co2 is not None and float(peak_co2) >= co2_high:
+        parts.append(f"peak_co2_storage_kg={float(peak_co2):.3g} >= co2_storage_high_kg={co2_high}")
+    return "; ".join(parts) if parts else f"co2_storage_high_kg policy={co2_high}"
+
+
+def _o2_stress_why(
+    *,
+    final_health: Dict[str, Any],
+    min_o2: Any,
+    o2_low: float,
+) -> str:
+    parts: List[str] = []
+    status = str(final_health.get("o2_status", "")).lower()
+    if status in {"warning", "critical"}:
+        parts.append(f"final o2_status={status}")
+    if min_o2 is not None and float(min_o2) <= o2_low:
+        parts.append(f"min_o2_storage_kg={float(min_o2):.3g} <= o2_storage_low_kg={o2_low}")
+    return "; ".join(parts) if parts else f"o2_storage_low_kg policy={o2_low}"
 
 
 def build_design_proposals_from_run(
@@ -267,18 +315,29 @@ def build_design_proposals_from_run(
     )
 
     if co2_stressed:
+        co2_why = _co2_stress_why(
+            final_health=final_health,
+            final_co2=final_co2,
+            peak_co2=peak_co2,
+            co2_high=co2_high,
+        )
         base_mass = float(ars_goal.get("initial_co2_mass", 1.8))
         proposed_mass = round(base_mass * 1.25, 6)
         if proposed_mass != base_mass:
             changes.append(
-                {
-                    "change_kind": "action_profile",
-                    "payload": {
-                        "subsystem": "ars",
-                        "action": "air_revitalisation",
-                        "fields": {"initial_co2_mass": proposed_mass},
+                _annotate_change(
+                    {
+                        "change_kind": "action_profile",
+                        "payload": {
+                            "subsystem": "ars",
+                            "action": "air_revitalisation",
+                            "fields": {"initial_co2_mass": proposed_mass},
+                        },
                     },
-                }
+                    why=co2_why,
+                    what="Raise ARS initial_co2_mass to remove more cabin CO2 per cycle.",
+                    how=f"initial_co2_mass: {base_mass} → {proposed_mass}",
+                )
             )
         proposed_high = round(co2_high * 0.9, 6)
         if proposed_high > 0.0 and proposed_high != co2_high:
@@ -287,39 +346,55 @@ def build_design_proposals_from_run(
                 target_policy="agents.policy.co2_storage_high_kg",
                 target_thresholds="thresholds.co2_storage_high_kg",
                 value=proposed_high,
+                why=co2_why,
+                what="Lower CO2 warning threshold to align policy with observed stress.",
+                how=f"co2_storage_high_kg: {co2_high} → {proposed_high}",
             )
 
     if o2_stressed:
+        o2_why = _o2_stress_why(
+            final_health=final_health,
+            min_o2=min_o2,
+            o2_low=o2_low,
+        )
         base_water = float(ogs_goal.get("input_water_mass", 0.015))
         proposed_water = round(base_water * 1.25, 6)
         if proposed_water != base_water:
             changes.append(
-                {
-                    "change_kind": "action_profile",
-                    "payload": {
-                        "subsystem": "ogs",
-                        "action": "oxygen_generation",
-                        "fields": {"input_water_mass": proposed_water},
+                _annotate_change(
+                    {
+                        "change_kind": "action_profile",
+                        "payload": {
+                            "subsystem": "ogs",
+                            "action": "oxygen_generation",
+                            "fields": {"input_water_mass": proposed_water},
+                        },
                     },
-                }
+                    why=o2_why,
+                    what="Raise OGS input_water_mass to generate more O2 per cycle.",
+                    how=f"input_water_mass: {base_water} → {proposed_water}",
+                )
             )
         if "request_co2_amount" in policy:
             base_amt = float(policy.get("request_co2_amount", 0.025))
             proposed_amt = round(base_amt * 1.25, 6)
             if proposed_amt != base_amt:
                 changes.append(
-                    {
-                        "change_kind": "service_config",
-                        "payload": {
-                            "service": "request_co2",
-                            "amount": proposed_amt,
-                            # Match agents.yaml / labeled default (false): absent
-                            # must not opt-in to pre-OGS request_co2 (LoopMock double debit).
-                            "before_ogs": bool(
-                                policy.get("request_co2_before_ogs", False)
-                            ),
+                    _annotate_change(
+                        {
+                            "change_kind": "service_config",
+                            "payload": {
+                                "service": "request_co2",
+                                "amount": proposed_amt,
+                                "before_ogs": bool(
+                                    policy.get("request_co2_before_ogs", False)
+                                ),
+                            },
                         },
-                    }
+                        why=o2_why,
+                        what="Increase request_co2 amount to feed Sabatier / OGS loop.",
+                        how=f"request_co2_amount: {base_amt} → {proposed_amt}",
+                    )
                 )
 
     # L8 fallback: keep labeled proposals non-empty / non-no-op when possible.
@@ -331,28 +406,38 @@ def build_design_proposals_from_run(
             proposed_mass = round(base_mass * 1.1, 6)
             if proposed_mass > base_mass:
                 changes.append(
-                    {
-                        "change_kind": "action_profile",
-                        "payload": {
-                            "subsystem": "ars",
-                            "action": "air_revitalisation",
-                            "fields": {"initial_co2_mass": proposed_mass},
+                    _annotate_change(
+                        {
+                            "change_kind": "action_profile",
+                            "payload": {
+                                "subsystem": "ars",
+                                "action": "air_revitalisation",
+                                "fields": {"initial_co2_mass": proposed_mass},
+                            },
                         },
-                    }
+                        why="No stressed branch matched; fallback ARS profile bump.",
+                        what="Slightly raise ARS initial_co2_mass for next run.",
+                        how=f"initial_co2_mass: {base_mass} → {proposed_mass}",
+                    )
                 )
         if not changes and ogs_goal:
             base_water = float(ogs_goal.get("input_water_mass", 0.015))
             proposed_water = round(base_water * 1.1, 6)
             if proposed_water > base_water:
                 changes.append(
-                    {
-                        "change_kind": "action_profile",
-                        "payload": {
-                            "subsystem": "ogs",
-                            "action": "oxygen_generation",
-                            "fields": {"input_water_mass": proposed_water},
+                    _annotate_change(
+                        {
+                            "change_kind": "action_profile",
+                            "payload": {
+                                "subsystem": "ogs",
+                                "action": "oxygen_generation",
+                                "fields": {"input_water_mass": proposed_water},
+                            },
                         },
-                    }
+                        why="No stressed branch matched; fallback OGS profile bump.",
+                        what="Slightly raise OGS input_water_mass for next run.",
+                        how=f"input_water_mass: {base_water} → {proposed_water}",
+                    )
                 )
         if not changes:
             proposed_high = round(co2_high * 0.9, 6)
@@ -362,6 +447,9 @@ def build_design_proposals_from_run(
                     target_policy="agents.policy.co2_storage_high_kg",
                     target_thresholds="thresholds.co2_storage_high_kg",
                     value=proposed_high,
+                    why="No stressed branch matched; fallback CO2 threshold adjustment.",
+                    what="Lower CO2 warning threshold for next run.",
+                    how=f"co2_storage_high_kg: {co2_high} → {proposed_high}",
                 )
             else:
                 proposed_low = round(o2_low * 1.1, 6)
@@ -371,22 +459,30 @@ def build_design_proposals_from_run(
                         target_policy="agents.policy.o2_storage_low_kg",
                         target_thresholds="thresholds.o2_storage_low_kg",
                         value=proposed_low,
+                        why="No stressed branch matched; fallback O2 threshold adjustment.",
+                        what="Raise O2 low threshold for next run.",
+                        how=f"o2_storage_low_kg: {o2_low} → {proposed_low}",
                     )
                 elif "request_co2_amount" in policy:
                     base_amt = float(policy.get("request_co2_amount", 0.025))
                     proposed_amt = round(base_amt * 1.1, 6)
                     if proposed_amt > base_amt:
                         changes.append(
-                            {
-                                "change_kind": "service_config",
-                                "payload": {
-                                    "service": "request_co2",
-                                    "amount": proposed_amt,
-                                    "before_ogs": bool(
-                                        policy.get("request_co2_before_ogs", False)
-                                    ),
+                            _annotate_change(
+                                {
+                                    "change_kind": "service_config",
+                                    "payload": {
+                                        "service": "request_co2",
+                                        "amount": proposed_amt,
+                                        "before_ogs": bool(
+                                            policy.get("request_co2_before_ogs", False)
+                                        ),
+                                    },
                                 },
-                            }
+                                why="No stressed branch matched; fallback request_co2 bump.",
+                                what="Slightly raise request_co2 amount for next run.",
+                                how=f"request_co2_amount: {base_amt} → {proposed_amt}",
+                            )
                         )
 
     doc: Dict[str, Any] = {

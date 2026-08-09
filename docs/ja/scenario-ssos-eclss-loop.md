@@ -250,6 +250,8 @@ python -m scenario.ssos_eclss_loop.scenario_run --backend mock --agents-mode llm
 
 ### 前 run の設計提案を次 run に適用
 
+`--apply-proposals` は **シミュレーション開始前**に、ディスク上の `scenario.yaml` / `agents.yaml` を書き換えず、**メモリ上にロードした設定へマージ**する。適用後の実効設定は結果ディレクトリの `scenario_config.yaml` / `agents_config.yaml` に出力される。
+
 ```bash
 python -m scenario.ssos_eclss_loop.scenario_run --backend mock --agents-mode llm \
   --apply-proposals src/experiments/results/ssos_eclss_loop_llm/design_proposals.json
@@ -275,6 +277,8 @@ python -m scenario.ssos_eclss_loop.scenario_run --backend mock --agents-mode llm
 | `events.jsonl` | `operational_applied` / `operational_rejected` |
 | `design_state.jsonl` | 各 step の `ssos_graph` スナップショット（rewires 含む） |
 | `design_proposals.json` | 事後の `ssos_graph` 恒久案（`changes` 非空のときのみ書込） |
+| `scenario_config.yaml` | 使用したシナリオ設定一式（overrides / `--apply-proposals` 適用後） |
+| `agents_config.yaml` | 使用したエージェント設定一式（mode ≠ none のとき） |
 | `summary.json` | peak CO₂、operational 回数、backend 種別など |
 | `provenance.jsonl` | 運用レコード（`record_type: operational`） |
 

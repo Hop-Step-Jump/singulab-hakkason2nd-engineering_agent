@@ -24,11 +24,15 @@ from scenario.agents.ssos_eclss_loop_team import SsosEclssLoopTeam
 from scenario.jobs.resolve import resolve_run_directory
 from scenario.runner import (
     _deep_merge,
-    agents_config_path,
     load_agents_config,
     scenario_config_path,
+    write_effective_configs,
 )
-from scenario.ssos_eclss_loop.health import compute_eclss_storage_health
+from scenario.ssos_eclss_loop.health import (
+    build_effective_thresholds,
+    compute_eclss_storage_health,
+    health_inputs_note,
+)
 from scenario.ssos_eclss_loop.loop_mock_backend import LoopMockEclssBackend
 from scenario.ssos_eclss_loop.design_proposals import (
     apply_design_proposals,
@@ -191,10 +195,16 @@ class SsosEclssLoopScenario(Scenario):
         run_id: Optional[str] = None,
         results_root: Optional[Path] = None,
     ) -> Path:
+        # Load order (before any simulation step):
+        # 1) scenario.yaml (+ CLI overrides)
+        # 2) --apply-proposals merges into in-memory config (disk YAML unchanged)
+        # 3) agents.yaml ⊕ scenario.agents, then labeled policy from thresholds
         config = self.load_config(overrides)
+        applied_proposals_path: Optional[Path] = None
         if apply_proposals_path is not None:
             proposals = load_design_proposals(apply_proposals_path)
             config = apply_design_proposals(config, proposals)
+            applied_proposals_path = Path(apply_proposals_path)
         thresholds = config.get("thresholds", {}) or {}
         agents_config = load_agents_config(self.name, config)
         if agents_config:
@@ -203,6 +213,12 @@ class SsosEclssLoopScenario(Scenario):
         steps = int(sim_cfg.get("steps", 8))
         output_cfg = config.get("output", {})
         backend_kind = resolve_backend_kind(config, overrides)
+        # Persist the resolved kind (CLI / SSOS_ECLSS_BACKEND may differ from YAML).
+        backend_section = config.get("backend")
+        if not isinstance(backend_section, dict):
+            backend_section = {}
+            config["backend"] = backend_section
+        backend_section["kind"] = backend_kind
 
         run_dir = resolve_run_directory(
             scenario_name=self.name,
@@ -212,6 +228,11 @@ class SsosEclssLoopScenario(Scenario):
             run_id=run_id,
             results_root=results_root,
             recreate_output=recreate_output,
+        )
+        config_paths = write_effective_configs(
+            run_dir,
+            scenario_config=config,
+            agents_config=agents_config,
         )
 
         backend = build_eclss_backend(config, kind=backend_kind)
@@ -321,6 +342,9 @@ class SsosEclssLoopScenario(Scenario):
             "final_health": last_health,
             "message_count": message_count,
             "operational_command_count": operational_command_count,
+            "thresholds": build_effective_thresholds(thresholds),
+            "health_inputs": health_inputs_note(),
+            **config_paths,
         }
         summary.update(
             _omit_nulls(
@@ -328,6 +352,9 @@ class SsosEclssLoopScenario(Scenario):
                     "ars_invoked_step": ars_invoked_step,
                     "ogs_invoked_step": ogs_invoked_step,
                     "co2_requested_step": co2_requested_step,
+                    "apply_proposals_path": (
+                        str(applied_proposals_path) if applied_proposals_path is not None else None
+                    ),
                 }
             )
         )

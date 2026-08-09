@@ -26,6 +26,7 @@ from scenario.runner import (
     agents_config_path,
     build_simulator,
     scenario_config_path,
+    write_effective_configs,
 )
 
 logger = logging.getLogger(__name__)
@@ -95,6 +96,11 @@ class ScrubberDegradationScenario(Scenario):
             run_id=run_id,
             results_root=results_root,
             recreate_output=recreate_output,
+        )
+        config_paths = write_effective_configs(
+            run_dir,
+            scenario_config=config,
+            agents_config=agents_config,
         )
 
         sim = self.build_simulator(config)
@@ -210,6 +216,7 @@ class ScrubberDegradationScenario(Scenario):
             "design_change_count": sum(
                 1 for e in sim.get_events() if "design_change" in str(e.get("kind", "")).lower()
             ),
+            **config_paths,
         }
 
         design_proposals_path = run_dir / "design_proposals.json"

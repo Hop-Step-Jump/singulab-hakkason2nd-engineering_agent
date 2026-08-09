@@ -46,6 +46,7 @@ class PlantSimEclssBackend:
         self.last_ars_goal: Optional[ArsGoal] = None
         self.last_ogs_goal: Optional[OgsGoal] = None
         self.last_wrs_goal: Optional[WrsGoal] = None
+        self._last_metabolism: Optional[Dict[str, float]] = None
 
     @classmethod
     def from_scenario_config(cls, config: Mapping[str, Any]) -> "PlantSimEclssBackend":
@@ -55,13 +56,27 @@ class PlantSimEclssBackend:
     # step capability (StepAdvanceableBackend)
     # ------------------------------------------------------------------ #
     def advance_step(self) -> None:
-        self.model.advance_step()
+        self._last_metabolism = self.model.advance_step()
 
     # ------------------------------------------------------------------ #
     # telemetry
     # ------------------------------------------------------------------ #
     def poll_telemetry(self) -> EclssTelemetrySnapshot:
         s = self.model.state
+        plant_sim_topic: Dict[str, Any] = {
+            "simulation_time_s": s.simulation_time_s,
+            "captured_co2_kg": s.captured_co2_kg,
+            "urine_buffer_l": s.urine_buffer_l,
+            "total_co2_vented_kg": s.total_co2_vented_kg,
+            "total_h2_vented_kg": s.total_h2_vented_kg,
+            "total_ch4_vented_kg": s.total_ch4_vented_kg,
+            "total_wrs_brine_loss_l": s.total_wrs_brine_loss_l,
+            "total_o2_shortfall_kg": s.total_o2_shortfall_kg,
+            "total_water_shortfall_l": s.total_water_shortfall_l,
+        }
+        if self._last_metabolism is not None:
+            plant_sim_topic["last_metabolism"] = dict(self._last_metabolism)
+            self._last_metabolism = None
         return EclssTelemetrySnapshot(
             co2_storage_kg=s.cabin_co2_kg,
             o2_storage_kg=s.available_o2_kg,
@@ -70,19 +85,7 @@ class PlantSimEclssBackend:
             ars_failure_enabled=self._failure_flags["ars"],
             ogs_failure_enabled=self._failure_flags["ogs"],
             wrs_failure_enabled=self._failure_flags["wrs"],
-            raw_topics={
-                "plant_sim": {
-                    "simulation_time_s": s.simulation_time_s,
-                    "captured_co2_kg": s.captured_co2_kg,
-                    "urine_buffer_l": s.urine_buffer_l,
-                    "total_co2_vented_kg": s.total_co2_vented_kg,
-                    "total_h2_vented_kg": s.total_h2_vented_kg,
-                    "total_ch4_vented_kg": s.total_ch4_vented_kg,
-                    "total_wrs_brine_loss_l": s.total_wrs_brine_loss_l,
-                    "total_o2_shortfall_kg": s.total_o2_shortfall_kg,
-                    "total_water_shortfall_l": s.total_water_shortfall_l,
-                }
-            },
+            raw_topics={"plant_sim": plant_sim_topic},
         )
 
     # ------------------------------------------------------------------ #

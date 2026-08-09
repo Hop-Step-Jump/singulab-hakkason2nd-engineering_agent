@@ -92,7 +92,27 @@ def test_build_design_proposals_from_policy():
     assert validate_design_proposals(doc) == []
 
 
-def test_build_design_proposals_from_stressed_summary():
+def test_build_design_proposals_from_policy_includes_why_what_how():
+    policy = {
+        "co2_storage_high_kg": 1.5,
+        "o2_storage_low_kg": 0.45,
+        "request_co2_amount": 0.025,
+        "request_co2_before_ogs": True,
+        "ars_goal": {"initial_co2_mass": 1.8},
+        "ogs_goal": {"input_water_mass": 0.01},
+    }
+    doc = build_design_proposals_from_run(
+        proposed_by="eclss_operator_1",
+        decision_source="rule",
+        policy=policy,
+    )
+    change = next(c for c in doc["changes"] if c["change_kind"] == "action_profile")
+    assert change.get("why")
+    assert change.get("what")
+    assert change.get("how")
+
+
+def test_build_design_proposals_from_stressed_summary_includes_why_what_how():
     policy = {
         "co2_storage_high_kg": 1.5,
         "o2_storage_low_kg": 0.45,
@@ -115,6 +135,10 @@ def test_build_design_proposals_from_stressed_summary():
     assert "action_profile" in kinds
     assert "set_parameter" in kinds
     assert "service_config" in kinds
+    for change in doc["changes"]:
+        assert change.get("why")
+        assert change.get("what")
+        assert change.get("how")
 
 
 def test_build_design_proposals_fallback_without_goals_uses_threshold():

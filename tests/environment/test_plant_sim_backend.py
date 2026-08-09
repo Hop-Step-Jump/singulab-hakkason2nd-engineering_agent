@@ -44,6 +44,23 @@ def test_poll_telemetry_maps_cabin_co2_and_is_independent():
     assert t2.co2_storage_kg > t1.co2_storage_kg
 
 
+def test_poll_telemetry_exports_last_metabolism_once():
+    b = _backend()
+    before = b.poll_telemetry()
+    assert "last_metabolism" not in (before.raw_topics.get("plant_sim") or {})
+
+    b.advance_step()
+    with_metab = b.poll_telemetry()
+    metab = (with_metab.raw_topics.get("plant_sim") or {}).get("last_metabolism")
+    assert isinstance(metab, dict)
+    assert metab.get("co2_generated_kg", 0.0) > 0.0
+    assert "o2_consumed_kg" in metab
+    assert "urine_generated_l" in metab
+
+    cleared = b.poll_telemetry()
+    assert "last_metabolism" not in (cleared.raw_topics.get("plant_sim") or {})
+
+
 def test_advance_step_capability_present():
     b = _backend()
     assert hasattr(b, "advance_step")
