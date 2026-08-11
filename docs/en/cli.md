@@ -64,7 +64,7 @@ ea job run /tmp/job.json
 | `--results-root` | Override `src/experiments/results` (also `EA_RESULTS_ROOT`) |
 | `--set KEY=VALUE` | Dot-notation deep override |
 | `--override-file` | YAML/JSON patch merged into scenario config |
-| `--backend` | `mock` or `ros2` (`ssos_eclss_loop` only) |
+| `--backend` | `mock`, `plant_sim`, or `ros2` (`ssos_eclss_loop` only) |
 | `--apply-proposals` | Apply prior `design_proposals.json` (`ssos_eclss_loop`) |
 | `--seed` | Record a seed in `summary.json` for future sweeps |
 | `--no-recreate` | Keep an existing output directory |
@@ -163,11 +163,14 @@ Volume mounts are fixed at container **create** time. If helper scripts are miss
 
 **Windows / Linux**: no bundled runner yet — see manual mount steps in `scripts/ssos/README.md`.
 
-### Mock backend (no Docker)
+### Mock / plant_sim backends (no Docker)
 
 ```bash
 ea run ssos_eclss_loop --backend mock --agents-mode labeled_rule_base --steps 8
+ea run ssos_eclss_loop --backend plant_sim --agents-mode labeled_rule_base --steps 72
 ```
+
+`plant_sim` adds crew metabolism, WRS water-loop closure, and mass-balance ledgers — see [Plant Sim backend](memo/ssos_eclss_loop/plant_sim_backend.md).
 
 ### Environment variables
 

@@ -18,7 +18,7 @@ Both target research toward future space-station operations software (SSOS). The
 | | [scrubber_degradation](scenario-scrubber-degradation.md) | [ssos_eclss_loop](scenario-ssos-eclss-loop.md) |
 | --- | --- | --- |
 | Purpose | Mock CO₂ scrubber anomaly with EPS coupling | SSOS live ECLSS operations (Crew Simulation replacement) |
-| Backend | `StationSimulator` | `EclssBackend` (mock / `Ros2EclssBridge`) |
+| Backend | `StationSimulator` | `EclssBackend` (mock / plant_sim / `Ros2EclssBridge`) |
 | Telemetry | CO₂ ppm, power margin | CO₂/O₂/water storage (kg / L) |
 | Runtime | Recovery commands (fan, EPS boost) | Operational commands (ARS, OGS, request_co2) |
 | Post-run | Scrubber topology | `ssos_graph` (`action_profile`, `graph_rewire`) |
@@ -162,7 +162,7 @@ Spec: [scenario-ssos-eclss-loop.md](scenario-ssos-eclss-loop.md).
 | Scenario | ID prefix | Default count | Representative action |
 | --- | --- | --- | --- |
 | scrubber | `engineer` | 4 | `engineer_{(step-1) % N}` |
-| ssos | `eclss_operator` | 3 | `eclss_operator_{(step-1) % N}` |
+| ssos | `eclss_operator` | 3 | `eclss_operator_{step % N}` (0-based steps) |
 
 Each step: all agents discuss (llm) or rules emit diagnostics (labeled). **Post-run design** is output by the representative at the final step to `design_proposals.json`.
 

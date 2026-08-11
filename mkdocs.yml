@@ -86,6 +86,7 @@ plugins:
                 - ROS2 graph investigation: memo/ssos_eclss_loop/ssos_ros2_graph_design_investigation.md
                 - ECLSS physical phenomena: memo/ssos_eclss_loop/ssos_eclss_physical_phenomena_overview.md
                 - EPS physical phenomena: memo/ssos_eclss_loop/ssos_eps_physical_phenomena_overview.md
+                - Plant Sim backend: memo/ssos_eclss_loop/plant_sim_backend.md
                 - Persona LLM OOP plan: memo/agents/persona_llm_core_oop_plan.md
                 - Persona workshop draft: memo/agents/persona_workshop_draft.md
         - locale: ja

@@ -90,13 +90,17 @@ classDiagram
     contract tests / unit
   }
   class LoopMockEclssBackend {
-    ssos_eclss_loop dynamics
+    ssos_eclss_loop simplified dynamics
+  }
+  class PlantSimEclssBackend {
+    mass-balance plant model
   }
   class Ros2EclssBridge {
     ros2 CLI subprocess
   }
   EclssBackend <|.. MockEclssBackend
   EclssBackend <|.. LoopMockEclssBackend
+  EclssBackend <|.. PlantSimEclssBackend
   EclssBackend <|.. Ros2EclssBridge
 ```
 
@@ -104,7 +108,10 @@ classDiagram
 | --- | --- | --- |
 | `MockEclssBackend` | `ssos/eclss/mock/backend.py` | pytest / Phase 1b contract |
 | `LoopMockEclssBackend` | `scenario/ssos_eclss_loop/loop_mock_backend.py` | Scenario simplified dynamics |
+| `PlantSimEclssBackend` | `ssos/eclss/plant_sim/backend.py` | Mass-balance plant for agent verification |
 | `Ros2EclssBridge` | `ssos/eclss/ros2/bridge.py` | SSOS Docker live graph |
+
+`plant_sim` implements `advance_step()` for per-step crew metabolism. See [Plant Sim backend](../memo/ssos_eclss_loop/plant_sim_backend.md).
 
 ### Ros2EclssBridge design
 
@@ -216,4 +223,5 @@ ros2 action send_goal /air_revitalisation \
 ## Related
 
 - [API reference — EclssBackend](api-reference.md#eclssbackend)
+- [Plant Sim backend](../memo/ssos_eclss_loop/plant_sim_backend.md)
 - [ssos_eclss_loop scenario](../scenario-ssos-eclss-loop.md)

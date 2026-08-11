@@ -342,7 +342,7 @@ python -c "from scenario.runner import run_scenario; run_scenario('scrubber_degr
 
 ## ssos_eclss_loop
 
-SSOS Docker 内の実 ROS2 ECLSS（または `LoopMockEclssBackend`）を操作するシナリオ。`SimulatorProtocol` は使わない。
+SSOS Docker 内の実 ROS2 ECLSS、またはホスト backend（`LoopMockEclssBackend`、`PlantSimEclssBackend`）を操作するシナリオ。`SimulatorProtocol` は使わない。
 
 ### EclssBackend
 
@@ -351,9 +351,10 @@ SSOS Docker 内の実 ROS2 ECLSS（または `LoopMockEclssBackend`）を操作�
 | クラス | 用途 |
 | --- | --- |
 | `LoopMockEclssBackend` | ホスト dev / pytest（簡易ストレージ動態） |
+| `PlantSimEclssBackend` | ホスト dev — 乗員 + ARS/OGS/WRS 物質収支（[解説](memo/ssos_eclss_loop/plant_sim_backend.md)） |
 | `Ros2EclssBridge` | SSOS Docker 内 `ros2` CLI ブリッジ |
 
-backend 選択: `scenario.yaml` の `backend.kind`、環境変数 `SSOS_ECLSS_BACKEND`、CLI `--backend mock|ros2`（または `ea run … --backend mock`）。
+backend 選択: `scenario.yaml` の `backend.kind`、環境変数 `SSOS_ECLSS_BACKEND`、CLI `--backend mock|plant_sim|ros2`。
 
 | メソッド | 説明 |
 | --- | --- |
@@ -381,9 +382,11 @@ backend 選択: `scenario.yaml` の `backend.kind`、環境変数 `SSOS_ECLSS_BA
 
 | フィールド | ROS2 トピック |
 | --- | --- |
-| `co2_storage_kg` | `/co2_storage` |
+| `co2_storage_kg` | `/co2_storage`（`plant_sim` では cabin CO₂） |
 | `o2_storage_kg` | `/o2_storage` |
 | `product_water_reserve_l` | `/wrs/product_water_reserve` |
+
+`plant_sim` では `raw_topics.plant_sim` に ledger フィールド（`captured_co2_kg`、vent 累積、shortfall、尿バッファ等）が入る。`co2_storage_kg` は **cabin** CO₂ であり、captured タンクではない。
 
 運用コマンドがあった step では、`"post_ops": true` 付きの 2 行目が追記されうる（L5）。ダッシュボード等の読取側は `post_ops`／同 step の最終行を優先し、`summary.json` と揃える。
 
@@ -495,7 +498,7 @@ ops 後に health を更新する場合、`telemetry.jsonl` と同様に `"post_
 
 ```json
 {
-  "step": 1,
+  "step": 0,
   "ssos_graph": {
     "rewires": [{"public": "/co2_storage", "backend": "/co2_storage"}]
   }

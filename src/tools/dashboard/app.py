@@ -445,19 +445,27 @@ def _render_agent_scroll_feed(
     )
 
 
-def _init_step_state(run_name: str, *, run_key: str, step_key: str, default_step: int, max_step: int) -> None:
+def _init_step_state(
+    run_name: str,
+    *,
+    run_key: str,
+    step_key: str,
+    default_step: int,
+    min_step: int,
+    max_step: int,
+) -> None:
     if st.session_state.get(run_key) != run_name:
         st.session_state[run_key] = run_name
         st.session_state[step_key] = default_step
     st.session_state[step_key] = min(
-        max(int(st.session_state.get(step_key, default_step)), 1),
+        max(int(st.session_state.get(step_key, default_step)), min_step),
         max_step,
     )
 
 
-def _should_show_step_slider(max_step: int) -> bool:
+def _should_show_step_slider(min_step: int, max_step: int) -> bool:
     """Streamlit sliders require min_value < max_value; omit when only one step."""
-    return int(max_step) > 1
+    return int(max_step) > int(min_step)
 
 
 def _bind_arrow_key_step_nav(*, prev_key: str, next_key: str) -> None:
@@ -518,16 +526,22 @@ def _bind_arrow_key_step_nav(*, prev_key: str, next_key: str) -> None:
 def _step_nav_controls(
     *,
     step_key: str,
+    min_step: int,
     max_step: int,
     slider_label: str,
     key_prefix: str,
-    reset_to: int = 1,
+    reset_to: Optional[int] = None,
 ) -> int:
     """Slider plus Previous / Next / Reset; Left/Right arrows mirror the buttons."""
-    max_step = max(int(max_step), 1)
+    min_step = int(min_step)
+    max_step = max(int(max_step), min_step)
+    if reset_to is None:
+        reset_to = min_step
     if step_key not in st.session_state:
         st.session_state[step_key] = reset_to
-    st.session_state[step_key] = min(max(int(st.session_state[step_key]), 1), max_step)
+    st.session_state[step_key] = min(
+        max(int(st.session_state[step_key]), min_step), max_step
+    )
 
     prev_label = "◀ Previous"
     next_label = "Next ▶"
@@ -538,7 +552,7 @@ def _step_nav_controls(
         prev_clicked = st.button(
             prev_label,
             key=prev_key,
-            disabled=int(st.session_state[step_key]) <= 1,
+            disabled=int(st.session_state[step_key]) <= min_step,
             use_container_width=True,
         )
     with cols[1]:
@@ -552,23 +566,23 @@ def _step_nav_controls(
         reset_clicked = st.button("Reset", key=f"{key_prefix}_reset", use_container_width=True)
 
     if prev_clicked:
-        st.session_state[step_key] = max(1, int(st.session_state[step_key]) - 1)
+        st.session_state[step_key] = max(min_step, int(st.session_state[step_key]) - 1)
     if next_clicked:
         st.session_state[step_key] = min(max_step, int(st.session_state[step_key]) + 1)
     if reset_clicked:
-        st.session_state[step_key] = min(max(reset_to, 1), max_step)
+        st.session_state[step_key] = min(max(reset_to, min_step), max_step)
 
     with cols[2]:
-        if _should_show_step_slider(max_step):
+        if _should_show_step_slider(min_step, max_step):
             st.session_state[step_key] = st.slider(
                 slider_label,
-                min_value=1,
+                min_value=min_step,
                 max_value=max_step,
                 value=int(st.session_state[step_key]),
             )
         else:
-            st.session_state[step_key] = 1
-            st.caption(f"{slider_label}: 1 (single-step run)")
+            st.session_state[step_key] = min_step
+            st.caption(f"{slider_label}: {min_step} (single-step run)")
 
     _bind_arrow_key_step_nav(prev_key=prev_key, next_key=next_key)
     st.caption("Tip: use ◀ Previous / Next ▶ or Left / Right arrow keys to move one step.")
@@ -668,12 +682,13 @@ def _render_scrubber_replay_detail_grid(run: RunViewData, current_step: int) -> 
 
 def _render_run_replay_view(run: RunViewData) -> None:
     """Per-run step replay: discourse row, then fixed detail grid, then variable tail."""
-    max_step = _max_telemetry_step(run.telemetry)
+    min_step, max_step = _telemetry_step_bounds(run.telemetry)
     _init_step_state(
         run.run_name,
         run_key="replay_run_name",
         step_key="replay_step",
-        default_step=1,
+        default_step=min_step,
+        min_step=min_step,
         max_step=max_step,
     )
 
@@ -681,10 +696,11 @@ def _render_run_replay_view(run: RunViewData) -> None:
     st.caption(f"`{run.run_dir}`")
     current_step = _step_nav_controls(
         step_key="replay_step",
+        min_step=min_step,
         max_step=max_step,
         slider_label="Replay step",
         key_prefix="replay",
-        reset_to=1,
+        reset_to=min_step,
     )
 
     left_col, right_col = st.columns([1.05, 1.05], gap="medium")
@@ -1615,8 +1631,20 @@ def _extract_final_parameters(design_state_rows: List[Dict[str, Any]]) -> Dict[s
     return dict(design_state_rows[-1].get("parameters", {}))
 
 
+def _telemetry_step_bounds(telemetry: List[Dict[str, Any]]) -> Tuple[int, int]:
+    """Return (min_step, max_step) from telemetry.
+
+    ssos_eclss_loop uses 0-based steps; scrubber_degradation stays 1-based.
+    Bounds follow the data so both work. Empty telemetry defaults to (1, 1).
+    """
+    steps = [int(r["step"]) for r in telemetry if r.get("step") is not None]
+    if not steps:
+        return 1, 1
+    return min(steps), max(steps)
+
+
 def _max_telemetry_step(telemetry: List[Dict[str, Any]]) -> int:
-    return max((int(r["step"]) for r in telemetry), default=1)
+    return _telemetry_step_bounds(telemetry)[1]
 
 
 @dataclass
@@ -1658,6 +1686,16 @@ def _render_dual_overview(primary: RunViewData, compare: RunViewData) -> None:
             st.caption(f"`{compare.run_dir}`"),
         ),
     )
+
+    primary_min, _ = _telemetry_step_bounds(primary.telemetry)
+    compare_min, _ = _telemetry_step_bounds(compare.telemetry)
+    if primary_min != compare_min:
+        st.warning(
+            f"Step indexing differs between runs: `{primary.run_name}` starts at "
+            f"step {primary_min}, `{compare.run_name}` at step {compare_min} "
+            "(0-based vs 1-based artifacts). The same numeric step may map to "
+            "different simulation phases."
+        )
 
     primary_ssos = ssos_views.is_ssos_eclss_loop(primary.summary)
     compare_ssos = ssos_views.is_ssos_eclss_loop(compare.summary)

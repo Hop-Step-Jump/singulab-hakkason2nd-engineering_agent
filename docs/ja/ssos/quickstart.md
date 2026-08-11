@@ -100,7 +100,7 @@ pytest --ignore=tests/e2e   # 回帰確認（205 passed / 4 skipped 前後を期
 | `SSOS_CONTAINER` | `ssos` | smoke ラッパーの対象コンテナ |
 | `SSOS_CONTAINER_REPO` | `/ea` | コンテナ内 sync 先 |
 | `ROS_DOMAIN_ID` | ECLSS: 未設定 / EPS: `23` | DDS ドメイン（EPS smoke ラッパーが 23 を export） |
-| `SSOS_ECLSS_BACKEND` | — | `ssos_eclss_loop` の backend 上書き（`mock` \| `ros2`） |
+| `SSOS_ECLSS_BACKEND` | — | `ssos_eclss_loop` の backend 上書き（`mock` \| `plant_sim` \| `ros2`） |
 
 !!! warning "Mac Docker と DDS"
     Mac Docker Desktop では `--network=host` が使えません。ホスト Mac から SSOS ROS グラフへ直接 DDS 接続するのは **非推奨** です。smoke ラッパーは `docker cp` + `docker exec` でコンテナ内実行します。
@@ -174,7 +174,9 @@ ros2 launch space_station space_station.launch.py
 
 ---
 
-## ssos_eclss_loop シナリオ（Mock — ROS 不要）
+## ssos_eclss_loop シナリオ（ホスト — ROS 不要）
+
+### mock（最速）
 
 ```bash
 cd /path/to/engineering_agents
@@ -183,7 +185,16 @@ PYTHONPATH=src python3 -m scenario.ssos_eclss_loop.scenario_run \
   --backend mock --agents-mode labeled_rule_base --steps 8
 ```
 
-出力: `src/experiments/results/ssos_eclss_loop_baseline/`（`telemetry.jsonl`, `health_metrics.jsonl`, `summary.json`）
+### plant_sim（物質収支プラント）
+
+```bash
+PYTHONPATH=src python3 -m scenario.ssos_eclss_loop.scenario_run \
+  --backend plant_sim --agents-mode labeled_rule_base --steps 72
+```
+
+[Plant Sim backend 解説](../memo/ssos_eclss_loop/plant_sim_backend.md) を参照。
+
+出力: `src/experiments/results/<run_id>/`（`telemetry.jsonl`, `health_metrics.jsonl`, `summary.json`）
 
 ---
 

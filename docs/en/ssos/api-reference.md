@@ -118,6 +118,7 @@ Publishes `std_msgs/Bool`. For verification and fault injection.
 | --- | --- | --- |
 | `MockEclssBackend` | `eclss/mock/backend.py` | pytest / contract tests |
 | `LoopMockEclssBackend` | `scenario/ssos_eclss_loop/loop_mock_backend.py` | `ssos_eclss_loop` mock dynamics |
+| `PlantSimEclssBackend` | `eclss/plant_sim/backend.py` | Mass-balance plant (`--backend plant_sim`) |
 | `Ros2EclssBridge` | `eclss/ros2/bridge.py` | SSOS Docker |
 
 Paths are under `src/environment/ssos/` unless noted.

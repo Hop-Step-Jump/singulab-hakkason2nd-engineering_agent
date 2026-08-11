@@ -255,8 +255,9 @@ class SsosEclssLoopScenario(Scenario):
         peak_co2: Optional[float] = None
         min_o2: Optional[float] = None
 
-        for step in range(1, steps + 1):
-            if step > 1 and hasattr(backend, "advance_step"):
+        # 0-based steps: step 0 observes configured initial state; advance before 1..steps-1.
+        for step in range(steps):
+            if step > 0 and hasattr(backend, "advance_step"):
                 backend.advance_step()
 
             snap = backend.poll_telemetry()

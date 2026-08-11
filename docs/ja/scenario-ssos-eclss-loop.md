@@ -10,11 +10,11 @@
 
 | 観点 | scrubber_degradation | ssos_eclss_loop |
 | --- | --- | --- |
-| バックエンド | `StationSimulator`（Python モック） | `EclssBackend`（`LoopMockEclssBackend` / `Ros2EclssBridge`） |
+| バックエンド | `StationSimulator`（Python モック） | `EclssBackend`（`LoopMockEclssBackend` / `PlantSimEclssBackend` / `Ros2EclssBridge`） |
 | テレメトリ | CO₂ ppm、スクラバー効率、電力マージン | `/co2_storage`、`/o2_storage`、`/wrs/product_water_reserve`（kg / L） |
 | ランタイム操作 | 回復コマンド（ファン、EPS ブースト等） | 運用コマンド（ARS Action、OGS Action、CO₂ Service 等） |
 | 事後提案 | scrubber トポロジ（`add_edge` 等） | `design_domain: ssos_graph`（`action_profile`、`graph_rewire` 等） |
-| 実行環境 | ホスト Python のみ | mock はホスト可。**ros2** は SSOS Docker + ECLSS headless |
+| 実行環境 | ホスト Python のみ | `mock` / `plant_sim` はホスト可。**ros2** は SSOS Docker + ECLSS headless |
 | 状態 | Mock 凍結 | Phase 0–7 完了（launch remap は Phase 8 バックログ） |
 
 ---
@@ -95,7 +95,7 @@ SSOS の ECLSS は、閉鎖環境の **CO₂ 除去（ARS）**、**O₂ 生成�
 
 **re-arm**: ARS / OGS を打った後もストレージが改善しなければ、次 step で再試行可能（`co2_at_ars_dispatch` / `o2_at_ogs_dispatch` 境界）。
 
-代表オペレータ `eclss_operator_{(step-1) % N}` がその step のコマンドを発行。事後は代表が `design_proposals.json`（`ssos_graph`）を出力。
+step は 0-based（`0 .. steps-1`）。代表オペレータ `eclss_operator_{step % N}` がその step のコマンドを発行。事後は代表が `design_proposals.json`（`ssos_graph`）を出力。
 
 ### llm
 
@@ -120,7 +120,7 @@ simulation:
   initial_product_water_l: 100.0
 
 backend:
-  kind: mock  # mock | ros2 — SSOS_ECLSS_BACKEND 環境変数でも上書き可
+  kind: mock  # mock | plant_sim | ros2 — SSOS_ECLSS_BACKEND 環境変数でも上書き可
 
 mock_dynamics:
   co2_growth_kg_per_step: 0.06
@@ -187,7 +187,7 @@ llm:
 | --- | --- | --- |
 | `air_revitalisation` | `send_air_revitalisation_goal()` | ARS サイクル — CO₂ 除去 |
 | `oxygen_generation` | `send_oxygen_generation_goal()` | OGS サイクル — O₂ 生成 |
-| `water_recovery_systems` | `send_water_recovery_goal()` | WRS サイクル（ros2 のみ；mock は未実装） |
+| `water_recovery_systems` | `send_water_recovery_goal()` | WRS サイクル（`plant_sim` と `ros2`；LoopMock は未実装） |
 | `request_co2` | `request_co2(amount)` | Sabatier feedstock 供給 |
 | `request_o2` | `request_o2(amount)` | O₂ 引き出し |
 
@@ -209,7 +209,7 @@ ROS launch ファイル側の remap（Phase 8）は [backlog BL-003](memo/backlo
 | --- | --- |
 | ID | `eclss_operator_1` … `eclss_operator_N`（デフォルト 3） |
 | deliberation | llm: 全員 1 ラウンド。labeled: 運用判断メッセージ |
-| action rep | `eclss_operator_{(step-1) % N}` |
+| action rep | `eclss_operator_{step % N}`（0-based steps） |
 | post-run rep | 最終 step の代表が `design_proposals.json`（`changes` 非空のときのみ） |
 
 `SsosEclssLoopTeam` は `Team` ABC を継承。`run_step(backend, obs)` / `apply_outcome(backend, outcome)` シグネチャ。
@@ -233,6 +233,16 @@ ROS launch ファイル側の remap（Phase 8）は [backlog BL-003](memo/backlo
 python -m scenario.ssos_eclss_loop.scenario_run --backend mock --agents-mode labeled_rule_base
 python -m scenario.ssos_eclss_loop.scenario_run --backend mock --agents-mode llm
 ```
+
+### plant_sim（ホスト、物質収支プラント）
+
+乗員代謝・WRS 水循環・ledger テレメトリ付きの中忠実度モデル。Docker 不要。
+
+```bash
+python -m scenario.ssos_eclss_loop.scenario_run --backend plant_sim --agents-mode labeled_rule_base --steps 72
+```
+
+詳細: [Plant Sim backend 解説](memo/ssos_eclss_loop/plant_sim_backend.md)。
 
 ### ros2（SSOS Docker）
 
@@ -340,7 +350,7 @@ python -m scenario.ssos_eclss_loop.scenario_run --backend mock --agents-mode llm
 
 ## ダッシュボードでの見方 { #ダッシュボードでの見方 }
 
-`summary.scenario == "ssos_eclss_loop"` の run は `src/tools/dashboard/ssos_views.py` に分岐。
+`summary.scenario == "ssos_eclss_loop"` の run は `src/tools/dashboard/ssos_views.py` に分岐。Overview / replay のスライダはテレメトリの min/max を使うため、ssos の 0-based steps（`0 .. steps-1`）も scrubber の 1-based もそのまま動く。
 
 1. **Overview** — CO₂ / O₂ / 水ストレージ kg のプロット、ヘルスカード、2 run 比較
 2. **Step replay** — `operational_applied` タイムライン、発言・reasoning、ストレージプロット

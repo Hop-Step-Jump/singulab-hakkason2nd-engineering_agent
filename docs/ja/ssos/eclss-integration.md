@@ -89,13 +89,17 @@ classDiagram
     契約テスト / 単体
   }
   class LoopMockEclssBackend {
-    ssos_eclss_loop 用 dynamics
+    ssos_eclss_loop 用簡易 dynamics
+  }
+  class PlantSimEclssBackend {
+    物質収支プラントモデル
   }
   class Ros2EclssBridge {
     ros2 CLI subprocess
   }
   EclssBackend <|.. MockEclssBackend
   EclssBackend <|.. LoopMockEclssBackend
+  EclssBackend <|.. PlantSimEclssBackend
   EclssBackend <|.. Ros2EclssBridge
 ```
 
@@ -103,7 +107,10 @@ classDiagram
 | --- | --- | --- |
 | `MockEclssBackend` | `ssos/eclss/mock/backend.py` | pytest / Phase 1b 契約 |
 | `LoopMockEclssBackend` | `scenario/ssos_eclss_loop/loop_mock_backend.py` | シナリオ用簡易 dynamics |
+| `PlantSimEclssBackend` | `ssos/eclss/plant_sim/backend.py` | 物質収支プラント（エージェント検証用） |
 | `Ros2EclssBridge` | `ssos/eclss/ros2/bridge.py` | SSOS Docker 実グラフ |
+
+`plant_sim` は `advance_step()` で乗員代謝を進める。詳細は [Plant Sim backend 解説](../memo/ssos_eclss_loop/plant_sim_backend.md)。
 
 ### Ros2EclssBridge の設計
 
@@ -215,4 +222,5 @@ ros2 action send_goal /air_revitalisation \
 ## 関連
 
 - [API リファレンス — EclssBackend](api-reference.md#eclssbackend)
+- [Plant Sim backend 解説](../memo/ssos_eclss_loop/plant_sim_backend.md)
 - [ssos_eclss_loop シナリオ](../scenario-ssos-eclss-loop.md)

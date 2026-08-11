@@ -100,7 +100,7 @@ pytest --ignore=tests/e2e   # regression check (expect ~205 passed, 4 skipped)
 | `SSOS_CONTAINER` | `ssos` | Target container for smoke wrappers |
 | `SSOS_CONTAINER_REPO` | `/ea` | Sync destination inside container |
 | `ROS_DOMAIN_ID` | ECLSS: unset / EPS: `23` | DDS domain (EPS smoke wrapper exports 23) |
-| `SSOS_ECLSS_BACKEND` | — | Backend override for `ssos_eclss_loop` (`mock` \| `ros2`) |
+| `SSOS_ECLSS_BACKEND` | — | Backend override for `ssos_eclss_loop` (`mock` \| `plant_sim` \| `ros2`) |
 
 !!! warning "Mac Docker and DDS"
     Mac Docker Desktop does not support `--network=host`. Direct DDS from the Mac host to the SSOS ROS graph is **not recommended**. Smoke wrappers use `docker cp` + `docker exec` to run inside the container.
@@ -174,7 +174,9 @@ ros2 launch space_station space_station.launch.py
 
 ---
 
-## ssos_eclss_loop scenario (Mock — no ROS)
+## ssos_eclss_loop scenario (host — no ROS)
+
+### mock (fastest)
 
 ```bash
 cd /path/to/engineering_agents
@@ -183,7 +185,16 @@ PYTHONPATH=src python3 -m scenario.ssos_eclss_loop.scenario_run \
   --backend mock --agents-mode labeled_rule_base --steps 8
 ```
 
-Output: `src/experiments/results/ssos_eclss_loop_baseline/` (`telemetry.jsonl`, `health_metrics.jsonl`, `summary.json`)
+### plant_sim (mass-balance plant)
+
+```bash
+PYTHONPATH=src python3 -m scenario.ssos_eclss_loop.scenario_run \
+  --backend plant_sim --agents-mode labeled_rule_base --steps 72
+```
+
+See [Plant Sim backend](../memo/ssos_eclss_loop/plant_sim_backend.md) for crew metabolism, WRS closure, and ledger telemetry.
+
+Output: `src/experiments/results/<run_id>/` (`telemetry.jsonl`, `health_metrics.jsonl`, `summary.json`)
 
 ---
 

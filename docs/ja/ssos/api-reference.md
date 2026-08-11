@@ -117,6 +117,7 @@ OGS（Sabatier）前の CO₂ 原料供給に使用。
 | --- | --- | --- |
 | `MockEclssBackend` | `eclss/mock/backend.py` | pytest / 契約テスト |
 | `LoopMockEclssBackend` | `scenario/ssos_eclss_loop/loop_mock_backend.py` | `ssos_eclss_loop` mock dynamics |
+| `PlantSimEclssBackend` | `eclss/plant_sim/backend.py` | 物質収支プラント（`--backend plant_sim`） |
 | `Ros2EclssBridge` | `eclss/ros2/bridge.py` | SSOS Docker |
 
 パスは特記なき限り `src/environment/ssos/` 配下。

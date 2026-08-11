@@ -34,7 +34,7 @@
 | **T1b** | 1b | ARS + OGS + Service | `Ros2EclssBridge` | `run_ssos_eclss_1b_smoke.sh` |
 | **T2** | 2 | + WRS（飲料水 vs 電解水） | `Ros2EclssBridge` | `run_ssos_eclss_2_smoke.sh` |
 | **T3** | 3 | EPS 読取 + `request_eps_boost` interim | `Ros2EpsBridge` | `run_ssos_eps_smoke.sh` |
-| **T4** | 4 | `ssos_eclss_loop` シナリオ + エージェント | mock \| ros2 切替 | `scenario_run.py` |
+| **T4** | 4 | `ssos_eclss_loop` シナリオ + エージェント | mock \| plant_sim \| ros2 | `scenario_run.py` |
 | **T5** | 5 | `design_proposals.json` + `--apply-proposals` | — | `scenario_run.py` |
 | **Regression** | — | コンテナ E2E オーケストレータ（pytest + smoke 連鎖 + ea-loop） | `run_ssos_regression.sh` | `.github/workflows/ssos-e2e.yml` |
 
@@ -66,6 +66,7 @@ flowchart TB
     EclssProto[EclssBackend Protocol]
     EpsProto[EpsBackend Protocol]
     MockEclss[LoopMockEclssBackend / MockEclssBackend]
+    PlantSim[PlantSimEclssBackend]
     Ros2Eclss[Ros2EclssBridge]
     MockEps[MockEpsBackend]
     Ros2Eps[Ros2EpsBridge]
@@ -82,6 +83,7 @@ flowchart TB
   Team --> Runner
   Runner --> EclssProto
   EclssProto --> MockEclss
+  EclssProto --> PlantSim
   EclssProto --> Ros2Eclss
   Ros2Eclss -->|ros2 CLI| ARS
   Ros2Eclss --> OGS
@@ -102,7 +104,7 @@ flowchart TB
 | シナリオ | シミュレータ | ECLSS | EPS |
 | --- | --- | --- | --- |
 | `scrubber_degradation` | `StationSimulator` | `MockEclssSimulator` | `mock` \| `ssos_eps` |
-| `ssos_eclss_loop` | なし（`EclssBackend` 直接） | `mock` \| `ros2` | 未使用（Phase 4） |
+| `ssos_eclss_loop` | なし（`EclssBackend` 直接） | `mock` \| `plant_sim` \| `ros2` | 未使用（Phase 4） |
 
 ---
 
@@ -113,6 +115,7 @@ flowchart TB
 | `src/environment/ssos/eclss/backend.py` | `EclssBackend` Protocol |
 | `src/environment/ssos/eclss/types.py` | Goal / Report データ型 |
 | `src/environment/ssos/eclss/mock/backend.py` | 契約テスト用 Mock |
+| `src/environment/ssos/eclss/plant_sim/` | 物質収支プラント backend |
 | `src/environment/ssos/eclss/ros2/bridge.py` | SSOS ECLSS ブリッジ（CLI） |
 | `src/environment/ssos/eclss/ros2/topics.py` | Action / Service / Topic 定数 |
 | `src/environment/ssos/eclss/ros2/graph_rewire.py` | クライアント側グラフ remap |

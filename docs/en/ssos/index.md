@@ -34,7 +34,7 @@ Integration deepens in stages. Each tier can be smoke-tested independently.
 | **T1b** | 1b | ARS + OGS + Service | `Ros2EclssBridge` | `run_ssos_eclss_1b_smoke.sh` |
 | **T2** | 2 | + WRS (potable water vs electrolysis water) | `Ros2EclssBridge` | `run_ssos_eclss_2_smoke.sh` |
 | **T3** | 3 | EPS read + `request_eps_boost` interim | `Ros2EpsBridge` | `run_ssos_eps_smoke.sh` |
-| **T4** | 4 | `ssos_eclss_loop` scenario + agents | mock \| ros2 switch | `scenario_run.py` |
+| **T4** | 4 | `ssos_eclss_loop` scenario + agents | mock \| plant_sim \| ros2 | `scenario_run.py` |
 | **T5** | 5 | `design_proposals.json` + `--apply-proposals` | — | `scenario_run.py` |
 | **Regression** | — | Container E2E orchestrator (pytest + smoke chain + ea-loop) | `run_ssos_regression.sh` | `.github/workflows/ssos-e2e.yml` |
 
@@ -66,6 +66,7 @@ flowchart TB
     EclssProto[EclssBackend Protocol]
     EpsProto[EpsBackend Protocol]
     MockEclss[LoopMockEclssBackend / MockEclssBackend]
+    PlantSim[PlantSimEclssBackend]
     Ros2Eclss[Ros2EclssBridge]
     MockEps[MockEpsBackend]
     Ros2Eps[Ros2EpsBridge]
@@ -82,6 +83,7 @@ flowchart TB
   Team --> Runner
   Runner --> EclssProto
   EclssProto --> MockEclss
+  EclssProto --> PlantSim
   EclssProto --> Ros2Eclss
   Ros2Eclss -->|ros2 CLI| ARS
   Ros2Eclss --> OGS
@@ -102,7 +104,7 @@ flowchart TB
 | Scenario | Simulator | ECLSS | EPS |
 | --- | --- | --- | --- |
 | `scrubber_degradation` | `StationSimulator` | `MockEclssSimulator` | `mock` \| `ssos_eps` |
-| `ssos_eclss_loop` | None (`EclssBackend` direct) | `mock` \| `ros2` | Not used (Phase 4) |
+| `ssos_eclss_loop` | None (`EclssBackend` direct) | `mock` \| `plant_sim` \| `ros2` | Not used (Phase 4) |
 
 ---
 
@@ -113,6 +115,7 @@ flowchart TB
 | `src/environment/ssos/eclss/backend.py` | `EclssBackend` Protocol |
 | `src/environment/ssos/eclss/types.py` | Goal / Report datatypes |
 | `src/environment/ssos/eclss/mock/backend.py` | Mock for contract tests |
+| `src/environment/ssos/eclss/plant_sim/` | Mass-balance plant backend |
 | `src/environment/ssos/eclss/ros2/bridge.py` | SSOS ECLSS bridge (CLI) |
 | `src/environment/ssos/eclss/ros2/topics.py` | Action / Service / Topic constants |
 | `src/environment/ssos/eclss/ros2/graph_rewire.py` | Client-side graph remap |

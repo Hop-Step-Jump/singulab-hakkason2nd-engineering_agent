@@ -135,11 +135,14 @@ ea results
 
 **Windows / Linux**: 専用ランナーは未整備。`scripts/ssos/README.md` の手動マウント手順を参照。
 
-### Mock（Docker 不要）
+### Mock / plant_sim（Docker 不要）
 
 ```bash
 ea run ssos_eclss_loop --backend mock --agents-mode labeled_rule_base --steps 8
+ea run ssos_eclss_loop --backend plant_sim --agents-mode labeled_rule_base --steps 72
 ```
+
+`plant_sim` は乗員代謝・WRS 水循環・物質収支 ledger を再現 — [Plant Sim backend 解説](memo/ssos_eclss_loop/plant_sim_backend.md)。
 
 ### 環境変数
 

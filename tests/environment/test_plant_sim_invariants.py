@@ -24,8 +24,8 @@ _INVENTORY_FIELDS = (
 def _run_closed_loop(steps: int, cfg: PlantSimConfig | None = None) -> PlantModel:
     """Simulate an agent that drives every subsystem once per step."""
     m = PlantModel(cfg or PlantSimConfig())
-    for step in range(1, steps + 1):
-        if step > 1:
+    for step in range(steps):
+        if step > 0:
             m.advance_step()
         m.run_ars(m.config.ars_reference_goal_co2_kg)
         m.run_wrs(2.0)

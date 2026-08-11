@@ -23,7 +23,7 @@ def _read_jsonl(path: Path) -> list:
     return [json.loads(line) for line in lines if line.strip()]
 
 
-def test_ssos_eclss_loop_steps_are_one_based(tmp_path: Path):
+def test_ssos_eclss_loop_steps_are_zero_based(tmp_path: Path):
     run_dir = run_scenario(
         "ssos_eclss_loop",
         output_dir=tmp_path / "steps",
@@ -32,7 +32,7 @@ def test_ssos_eclss_loop_steps_are_one_based(tmp_path: Path):
     )
     telemetry = _read_jsonl(run_dir / "telemetry.jsonl")
     steps = [row["step"] for row in telemetry]
-    assert steps == list(range(1, 11))
+    assert steps == list(range(10))
     assert "ssos_eclss_loop" in list_scenarios()
 
 
@@ -90,7 +90,7 @@ def test_ssos_eclss_loop_labeled_agents_invoke_ars(tmp_path: Path):
     ]
     assert summary["message_count"] > 0
     assert summary["operational_command_count"] >= 1
-    assert summary["ars_invoked_step"] == 1
+    assert summary["ars_invoked_step"] == 0
 
     message_types = {m["message_type"] for m in messages}
     assert "alert" in message_types
@@ -102,10 +102,10 @@ def test_ssos_eclss_loop_labeled_agents_invoke_ars(tmp_path: Path):
         (e.get("command") or {}).get("kind") == "air_revitalisation" for e in applied
     )
 
-    assert telemetry[0]["step"] == 1
+    assert telemetry[0]["step"] == 0
     assert telemetry[0]["co2_storage_kg"] == pytest.approx(1.5)
     assert telemetry[1]["co2_storage_kg"] < telemetry[0]["co2_storage_kg"], (
-        "ARS should reduce CO2 storage after step 1"
+        "ARS should reduce CO2 storage after step 0"
     )
     assert (run_dir / "design_proposals.json").exists()
     assert summary.get("design_proposal_count", 0) >= 1
@@ -125,7 +125,7 @@ def test_ssos_eclss_loop_labeled_policy_matches_thresholds(tmp_path: Path):
         recreate_output=True,
     )
     summary = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
-    assert summary["ars_invoked_step"] == 1
+    assert summary["ars_invoked_step"] == 0
 
 
 def test_ssos_eclss_loop_labeled_reinvokes_ars_when_co2_reexceeds(tmp_path: Path):
@@ -146,8 +146,8 @@ def test_ssos_eclss_loop_labeled_reinvokes_ars_when_co2_reexceeds(tmp_path: Path
     ]
 
     assert summary["operational_command_count"] >= 2
-    assert 1 in ars_steps
-    assert any(step > 1 for step in ars_steps), "ARS should re-fire after CO2 regrows past threshold"
+    assert 0 in ars_steps
+    assert any(step > 0 for step in ars_steps), "ARS should re-fire after CO2 regrows past threshold"
 
 
 def test_ssos_eclss_loop_provenance_includes_operational_records(tmp_path: Path):
@@ -227,7 +227,7 @@ def test_ssos_eclss_loop_labeled_agents_ogs_when_o2_low(tmp_path: Path):
     summary = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
     events = _read_jsonl(run_dir / "events.jsonl")
 
-    assert summary["ogs_invoked_step"] == 1
+    assert summary["ogs_invoked_step"] == 0
     # Default policy leaves CO₂ feedstock to OGS-internal Sabatier (no explicit request_co2).
     assert summary.get("co2_requested_step") is None
     applied_kinds = {
@@ -357,7 +357,7 @@ def test_ssos_eclss_loop_llm_agents_invoke_ars(tmp_path: Path, monkeypatch):
     assert summary["agents_mode"] == "llm"
     assert summary["team_count"] == 3
     assert summary["operational_command_count"] >= 1
-    assert summary["ars_invoked_step"] == 1
+    assert summary["ars_invoked_step"] == 0
     assert any(m.get("decision_source") == "llm" for m in messages)
     assert any(m.get("deliberation_phase") == "deliberation" for m in messages)
     assert any(m.get("deliberation_phase") == "action" for m in messages)

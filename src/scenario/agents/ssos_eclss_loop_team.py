@@ -85,6 +85,10 @@ class SsosEclssLoopTeam(Team):
             for agent_id, persona in self.personas.items()
         }
 
+    def _action_rep_id(self, step: int) -> str:
+        """Round-robin representative for 0-based scenario steps (`step % N`)."""
+        return self.team_cfg.agent_ids[step % self.team_cfg.count]
+
     def run_step(self, backend: EclssBackend, obs: EclssLoopObservation) -> StepEclssOutcome:
         _ = backend
         if self.llm_mode:
@@ -104,7 +108,7 @@ class SsosEclssLoopTeam(Team):
     def propose_post_run_design(self, summary: Dict[str, Any]) -> Dict[str, Any]:
         baseline_graph = dict(self.config.get("ssos_graph") or {})
         steps = int(summary.get("steps", 0))
-        rep = self.team_cfg.action_rep_id(steps if steps > 0 else 1)
+        rep = self._action_rep_id(steps - 1 if steps > 0 else 0)
         if self.llm_mode:
             return self._llm_post_run_design_proposal(summary, baseline_graph, rep)
         return build_design_proposals_from_run(
@@ -146,7 +150,7 @@ class SsosEclssLoopTeam(Team):
                     )
                 )
 
-        rep = self.team_cfg.action_rep_id(obs.step)
+        rep = self._action_rep_id(obs.step)
         action_msgs, action_cmds = self._llm_action_turn(obs, situation, step_discourse, rep)
         outcome.messages.extend(action_msgs)
         outcome.commands.extend(action_cmds)
@@ -154,7 +158,7 @@ class SsosEclssLoopTeam(Team):
 
     def _run_step_labeled(self, obs: EclssLoopObservation) -> StepEclssOutcome:
         outcome = StepEclssOutcome()
-        rep = self.team_cfg.action_rep_id(obs.step)
+        rep = self._action_rep_id(obs.step)
         co2_high = float(self.policy.get("co2_storage_high_kg", 1.5))
         co2_critical = float(self.policy.get("co2_storage_critical_kg", 2.2))
         o2_low = float(self.policy.get("o2_storage_low_kg", 0.45))

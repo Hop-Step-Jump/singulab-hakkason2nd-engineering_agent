@@ -345,7 +345,7 @@ python -c "from scenario.runner import run_scenario; run_scenario('scrubber_degr
 
 ## ssos_eclss_loop
 
-Operates live ROS2 ECLSS inside SSOS Docker (or `LoopMockEclssBackend`). Does **not** use `SimulatorProtocol`.
+Operates live ROS2 ECLSS inside SSOS Docker, or host backends (`LoopMockEclssBackend`, `PlantSimEclssBackend`). Does **not** use `SimulatorProtocol`.
 
 ### EclssBackend
 
@@ -354,9 +354,10 @@ Operates live ROS2 ECLSS inside SSOS Docker (or `LoopMockEclssBackend`). Does **
 | Class | Purpose |
 | --- | --- |
 | `LoopMockEclssBackend` | Host dev / pytest (simple storage dynamics) |
+| `PlantSimEclssBackend` | Host dev — crew + ARS/OGS/WRS mass balance ([doc](memo/ssos_eclss_loop/plant_sim_backend.md)) |
 | `Ros2EclssBridge` | SSOS Docker — ros2 CLI bridge |
 
-Backend selection: `scenario.yaml` `backend.kind`, env var `SSOS_ECLSS_BACKEND`, CLI `--backend mock|ros2` (or `ea run … --backend mock`).
+Backend selection: `scenario.yaml` `backend.kind`, env var `SSOS_ECLSS_BACKEND`, CLI `--backend mock|plant_sim|ros2` (or `ea run … --backend plant_sim`).
 
 | Method | Description |
 | --- | --- |
@@ -384,9 +385,11 @@ Implementation: `environment/ssos/eclss/backend.py`, `eclss/ros2/bridge.py`, `ec
 
 | Field | ROS2 topic |
 | --- | --- |
-| `co2_storage_kg` | `/co2_storage` |
+| `co2_storage_kg` | `/co2_storage` (or cabin CO₂ for `plant_sim`) |
 | `o2_storage_kg` | `/o2_storage` |
 | `product_water_reserve_l` | `/wrs/product_water_reserve` |
+
+With `plant_sim`, extra ledger fields appear under `raw_topics.plant_sim` (`captured_co2_kg`, vent totals, shortfalls, urine buffer). `co2_storage_kg` maps to **cabin** CO₂, not the captured tank.
 
 When operational commands run in a step, a second row may be appended with `"post_ops": true` (L5). Readers (dashboard) prefer `post_ops` / the last row for that step so UI matches `summary.json`.
 
@@ -498,7 +501,7 @@ Every step, **before** agent action. Snapshot of `ssos_graph` (includes `rewires
 
 ```json
 {
-  "step": 1,
+  "step": 0,
   "ssos_graph": {
     "rewires": [{"public": "/co2_storage", "backend": "/co2_storage"}]
   }

@@ -27,11 +27,11 @@ def test_select_row_for_step_falls_back_to_last_match():
 
 def test_series_by_step_dedupes_preferring_post_ops():
     rows = [
-        {"step": 1, "co2_storage_kg": 1.5},
-        {"step": 1, "co2_storage_kg": 1.2, "post_ops": True},
-        {"step": 2, "co2_storage_kg": 1.1},
-        {"step": 2, "co2_storage_kg": 1.0, "post_ops": True},
+        {"step": 0, "co2_storage_kg": 1.5},
+        {"step": 0, "co2_storage_kg": 1.2, "post_ops": True},
+        {"step": 1, "co2_storage_kg": 1.1},
+        {"step": 1, "co2_storage_kg": 1.0, "post_ops": True},
     ]
     series = series_by_step(rows)
-    assert [r["step"] for r in series] == [1, 2]
+    assert [r["step"] for r in series] == [0, 1]
     assert [r["co2_storage_kg"] for r in series] == [1.2, 1.0]

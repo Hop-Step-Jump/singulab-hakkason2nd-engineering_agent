@@ -21,7 +21,7 @@ def test_filter_ssos_operational_events_includes_water_recovery():
 def test_plant_sim_series_extracts_ledgers():
     rows = [
         {
-            "step": 1,
+            "step": 0,
             "co2_storage_kg": 1.5,
             "grey_water_collected_l": 0.1,
             "raw_topics": {
@@ -33,7 +33,7 @@ def test_plant_sim_series_extracts_ledgers():
             },
         },
         {
-            "step": 1,
+            "step": 0,
             "co2_storage_kg": 1.4,
             "grey_water_collected_l": 0.2,
             "post_ops": True,
@@ -45,10 +45,10 @@ def test_plant_sim_series_extracts_ledgers():
                 }
             },
         },
-        {"step": 2, "co2_storage_kg": 1.3},
+        {"step": 1, "co2_storage_kg": 1.3},
     ]
     series = ssos_views.plant_sim_series(rows)
-    assert [row["step"] for row in series] == [1]
+    assert [row["step"] for row in series] == [0]
     assert series[0]["captured_co2_kg"] == 0.25
     assert series[0]["urine_buffer_l"] == 0.0
     assert series[0]["grey_water_collected_l"] == 0.2
@@ -60,7 +60,7 @@ def test_build_line_plot_figure_skips_plant_sim_telemetry():
     if not (run_dir / "telemetry.jsonl").exists():
         telemetry = [
             {
-                "step": 1,
+                "step": 0,
                 "co2_storage_kg": 1.5,
                 "o2_storage_kg": 0.5,
                 "product_water_reserve_l": 100.0,
