@@ -35,8 +35,14 @@ policy:
     kind: bypass
 
 llm:
+  # ollama (local daemon) or vllm (lab GPU server: https://github.com/hirototamura/vllm_server)
+  provider: ollama
   base_url: http://localhost:11434
   model: gemma4:e4b
+  # Lab vLLM (LAN or VPN) — override with --llm-provider vllm or LLM_PROVIDER=vllm
+  #   small: base_url http://10.10.0.108:8000/v1  model qwen3-8b
+  #   mid:   base_url http://10.10.0.108:8001/v1  model qwen3-32b
+  # max_concurrency: 100  # in-flight cap; omit for provider/model defaults (vLLM 8B=100)
   temperature: 0.45
   max_tokens: 512
   repeat_penalty: 1.1

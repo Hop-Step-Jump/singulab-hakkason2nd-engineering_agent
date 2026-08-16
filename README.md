@@ -12,7 +12,7 @@ Run your first simulation in a few minutes. The **`ea`** CLI is the recommended 
 
 - **Python 3.11+** and **Git** on every platform
 - **Docker** only for `ssos_eclss_loop` with `--backend ros2` (live SSOS plant)
-- **Ollama** only for `--agents-mode llm`
+- **Ollama** or lab **vLLM** only for `--agents-mode llm`
 
 ### Install (macOS / Linux)
 
@@ -58,7 +58,7 @@ ea results
 | `ea run [SCENARIO]` | Run one simulation |
 | `ea scenarios` | List available scenarios |
 | `ea results [RUN_ID]` | Show recent runs or one `summary.json` |
-| `ea doctor` | Check Python, dependencies, Docker/SSOS, Ollama |
+| `ea doctor` | Check Python, dependencies, Docker/SSOS, Ollama, vLLM |
 
 Mock SSOS scenario:
 
@@ -74,7 +74,7 @@ ea results
 | `scrubber_degradation` | CO₂ scrubber anomaly on a Python mock plant | `ea run scrubber_degradation --agents-mode labeled_rule_base` |
 | `ssos_eclss_loop` | Agent team operating SSOS ECLSS (ARS/OGS/WRS) | `ea run ssos_eclss_loop --backend mock --agents-mode labeled_rule_base` |
 
-Agent modes: **`none`**, **`labeled_rule_base`** (reproducible regression), or **`llm`** (Ollama).
+Agent modes: **`none`**, **`labeled_rule_base`** (reproducible regression), or **`llm`** (Ollama or lab vLLM).
 
 ### Where results are saved
 

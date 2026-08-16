@@ -207,7 +207,7 @@ integrations/one_piece  ← scenario から呼び出し
 - 検証ブリッジがシミュレータをバイパスし、設計内容から「期待どおり」と推論する。
 - 物理世界が N/A の本デモで、仮想合格を**物理検証済み**と表現する。
 - ランタイム中に恒久トポロジを変え、設計と検証の分離を壊す（`apply_design_change` は Phase 0 で削除済み）。
-- `environment` にエージェントロジックや Ollama 依存を入れる。
+- `environment` にエージェントロジックや Ollama / vLLM 依存を入れる。
 - テレメトリや閾値を「だいたい」で丸めて合格扱いにする。
 
 ### エージェントモード（`agents.mode`）
@@ -230,7 +230,7 @@ pytest
 python -c "from scenario.runner import run_scenario; print(run_scenario('scrubber_degradation', overrides={'agents': {'mode': 'labeled_rule_base'}}))"
 ```
 
-LLM モードは Ollama 必須。CI・回帰は Fake LLM / `labeled_rule_base` を優先する。
+LLM モードは Ollama または研究室 vLLM が必要。CI・回帰は Fake LLM / `labeled_rule_base` を優先する。
 
 ---
 

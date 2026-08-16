@@ -29,7 +29,7 @@ readonly: false
 | 検証（pass/fail）の不整合 | `health_metrics`, 純粋関数チェッカー, `telemetry.jsonl` スキーマ |
 | SSOS / ECLSS 関連 | `src/environment/ssos/`, `scripts/run_ssos_*.sh` |
 | import / レイヤー違反 | 下層から上層への import（例: `environment/` → `scenario/`、`core/` → `environment/`）がないか |
-| LLM モードの失敗 | Ollama 未起動。CI では `labeled_rule_base` や Fake LLM を使う |
+| LLM モードの失敗 | Ollama / 研究室 vLLM 未起動・未到達。CI では `labeled_rule_base` や Fake LLM を使う |
 | JSONL スキーマ不一致 | `docs/en/api-contracts.md` |
 
 ## 修正の原則

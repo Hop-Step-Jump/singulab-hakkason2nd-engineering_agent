@@ -20,7 +20,7 @@ ea run
 `ea run` with no arguments runs:
 
 - scenario: `scrubber_degradation`
-- agents: `labeled_rule_base` (no Ollama required)
+- agents: `labeled_rule_base` (no Ollama / vLLM required)
 - steps: from `scenario.yaml` (default 50)
 
 To match the physics-only baseline in `scenario.yaml`, pass `--agents-mode none`.
@@ -32,7 +32,7 @@ To match the physics-only baseline in `scenario.yaml`, pass `--agents-mode none`
 | `ea run [SCENARIO]` | Run one simulation |
 | `ea scenarios` | List available scenarios |
 | `ea results [RUN_ID]` | List recent runs or show one `summary.json` |
-| `ea doctor` | Check Python 3.11+, dependencies, Docker/SSOS mounts, and Ollama |
+| `ea doctor` | Check Python 3.11+, dependencies, Docker/SSOS mounts, Ollama, and vLLM |
 | `ea job run SPEC.json` | Execute a serialized `RunSpec` (cluster-worker compatible) |
 | `ea --version` | Show CLI version |
 
@@ -47,6 +47,7 @@ python3 -m tools.cli run scrubber_degradation --agents-mode none
 ```bash
 ea run scrubber_degradation --agents-mode labeled_rule_base --steps 30
 ea run ssos_eclss_loop --backend mock --agents-mode none --steps 4
+ea run scrubber_degradation --agents-mode llm --llm-provider vllm
 ea run scrubber_degradation --set simulation.steps=10 --set agents.mode=none
 ea run scrubber_degradation --override-file my_patch.yaml
 ea run scrubber_degradation --output-dir /tmp/my-run
@@ -58,6 +59,8 @@ ea job run /tmp/job.json
 | Flag | Description |
 | --- | --- |
 | `--agents-mode` | `none`, `labeled_rule_base`, or `llm` |
+| `--llm-provider` | `ollama` (local) or `vllm` (lab GPU server). Only used with `--agents-mode llm` |
+| `--llm-model` | Override `agents.llm.model` (Ollama tag or vLLM served-model id) |
 | `--steps` | Override `simulation.steps` |
 | `--run-id` | Override output run id when using the default results root |
 | `--output-dir` | Write directly to a directory path |
@@ -81,7 +84,7 @@ ea job run /tmp/job.json
 | 0 | Success |
 | 1 | Simulation execution failed |
 | 2 | Invalid arguments or unknown scenario |
-| 3 | Environment error (for example Ollama unreachable in `llm` mode) |
+| 3 | Environment error (for example Ollama or vLLM unreachable in `llm` mode) |
 
 ## Viewing results
 
@@ -133,7 +136,7 @@ ea results
 | `src` → `/ea/src` | Code |
 | `experiments/results` → `/ea/results` | Run outputs on the host |
 
-For LLM agents, start Ollama on the host and use `--agents-mode llm`. No second terminal for headless.
+For LLM agents, start Ollama on the host **or** reach the lab vLLM server (LAN/VPN) and use `--agents-mode llm`. Example: `--llm-provider vllm`. No second terminal for headless.
 
 ### After setup: simulation only (full command list)
 
@@ -169,6 +172,7 @@ Volume mounts are fixed at container **create** time. If helper scripts are miss
 ```bash
 ea run ssos_eclss_loop --backend mock --agents-mode labeled_rule_base --steps 8
 ea run ssos_eclss_loop --backend plant_sim --agents-mode labeled_rule_base --steps 72
+ea run ssos_eclss_loop --backend mock --agents-mode llm --set agents.max_actions_per_step=8
 ```
 
 `plant_sim` adds crew metabolism, WRS water-loop closure, and mass-balance ledgers — see [Plant Sim backend](memo/ssos_eclss_loop/plant_sim_backend.md).
@@ -181,6 +185,8 @@ ea run ssos_eclss_loop --backend plant_sim --agents-mode labeled_rule_base --ste
 | `EA_MOUNT_SRC` | `/ea/src` | Mounted source path inside container |
 | `EA_MOUNT_RESULTS` | `/ea/results` | Mounted results path inside container |
 | `EA_HEADLESS_POLL_TIMEOUT_S` | `120` | Wait for ros2 graph after headless restart |
+
+`LLM_PROVIDER`, `VLLM_BASE_URL`, `VLLM_MODEL`, `VLLM_API_KEY`, and `VLLM_API_TIMEOUT` are forwarded into the container so ros2 llm jobs match host preflight.
 
 ### Exit code 3 (environment)
 

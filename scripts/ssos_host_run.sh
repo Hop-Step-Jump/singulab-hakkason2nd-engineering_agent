@@ -250,7 +250,13 @@ _run_job() {
   local job_in_container="/tmp/ea-job-$$.json"
   echo "==> Running job in '$CONTAINER'"
   docker cp "$JOB_JSON_HOST" "$CONTAINER:$job_in_container"
-  docker exec "$CONTAINER" bash -lc "
+  docker exec \
+    -e "LLM_PROVIDER=${LLM_PROVIDER-}" \
+    -e "VLLM_BASE_URL=${VLLM_BASE_URL-}" \
+    -e "VLLM_MODEL=${VLLM_MODEL-}" \
+    -e "VLLM_API_KEY=${VLLM_API_KEY-}" \
+    -e "VLLM_API_TIMEOUT=${VLLM_API_TIMEOUT-}" \
+    "$CONTAINER" bash -lc "
     set -euo pipefail
     set +u
     source /opt/ros/jazzy/setup.bash

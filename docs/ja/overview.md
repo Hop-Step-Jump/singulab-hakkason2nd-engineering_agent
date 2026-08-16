@@ -223,7 +223,7 @@ SSOS の ECLSS は、閉鎖環境の **CO₂ 除去（ARS）**、**O₂ 生成�
 
 - **Python 3.11+**
 - **Git**
-- **Ollama**（`agents.mode: llm` を使う場合のみ）
+- **Ollama** または研究室 **vLLM**（`agents.mode: llm` を使う場合のみ）
 - **SSOS Docker**（`ssos_eclss_loop` の **ros2** モードのみ）— [scenario-ssos-eclss-loop.md](scenario-ssos-eclss-loop.md#実行方法)
 
 ---
@@ -329,7 +329,11 @@ pytest tests/scenario/test_ssos_eclss_loop*.py tests/environment/test_graph_rewi
 python src/scripts/run_tests.py
 ```
 
-### 4. Ollama（LLM モード用）
+### 4. LLM バックエンド（LLM モード用）
+
+`agents.mode: llm` は次のいずれかが必要です。既定は **Ollama**。`--llm-provider vllm` または `LLM_PROVIDER=vllm` で切り替えます。
+
+#### Ollama（ローカル）
 
 [https://ollama.com](https://ollama.com) から Ollama をインストールし、デーモンを起動します。
 
@@ -338,11 +342,30 @@ python src/scripts/run_tests.py
 ollama pull gemma4:e4b
 
 # 別モデルで試す場合は agents.yaml の llm.model を変更するか、
-# 実行後に run_id を変えて比較してください
+# --llm-model で上書き
 ollama list
 ```
 
-デフォルトの LLM 設定は各シナリオの `agents.yaml`（scrubber: [``scrubber_degradation/agents.yaml``](https://github.com/hirototamura/engineering_agents/blob/main/src/scenario/scrubber_degradation/agents.yaml)、ssos: [``ssos_eclss_loop/agents.yaml``](https://github.com/hirototamura/engineering_agents/blob/main/src/scenario/ssos_eclss_loop/agents.yaml)）。Ollama が起動していないと `llm` モードは失敗します。コンテナ内 `ea-loop` は `OLLAMA_BASE_URL=host.docker.internal` を既定設定します。
+コンテナ内 `ea-loop` は `OLLAMA_BASE_URL=host.docker.internal` を既定設定します。
+
+#### 研究室 vLLM（GPU サーバー）
+
+研究室マシン `gpu-sv-008`（`10.10.0.108`）が OpenAI 互換 API を公開しています。研究室 LAN または VPN から到達できます（公開アドレスではありません）。そのマシンで別の `vllm serve` を立てないこと。セットアップ: [hirototamura/vllm_server](https://github.com/hirototamura/vllm_server)。
+
+| 用途 | URL | `model` |
+| --- | --- | --- |
+| 日常の議論（既定） | `http://10.10.0.108:8000/v1` | `qwen3-8b` |
+| 重い判断 | `http://10.10.0.108:8001/v1` | `qwen3-32b` |
+
+```bash
+ea run scrubber_degradation --agents-mode llm --llm-provider vllm
+ea run scrubber_degradation --agents-mode llm --llm-provider vllm --llm-model qwen3-32b \
+  --set agents.llm.base_url=http://10.10.0.108:8001/v1
+```
+
+環境変数: `VLLM_BASE_URL`、`VLLM_MODEL`、`VLLM_API_KEY`、`VLLM_API_TIMEOUT`、`LLM_PROVIDER`。SSH トンネル例: `VLLM_BASE_URL=http://127.0.0.1:8000/v1`。`agents.llm.api_timeout` は Ollama 用。vLLM は既定 300s（`VLLM_API_TIMEOUT` で上書き）。
+
+デフォルトの LLM 設定は各シナリオの `agents.yaml`（scrubber: [``scrubber_degradation/agents.yaml``](https://github.com/hirototamura/engineering_agents/blob/main/src/scenario/scrubber_degradation/agents.yaml)、ssos: [``ssos_eclss_loop/agents.yaml``](https://github.com/hirototamura/engineering_agents/blob/main/src/scenario/ssos_eclss_loop/agents.yaml)）。選択したバックエンドに届かないと `llm` モードは失敗します。
 
 ---
 
@@ -360,7 +383,7 @@ ea run
 ea scenarios
 ea run scrubber_degradation --agents-mode none
 ea run scrubber_degradation --agents-mode labeled_rule_base
-ea run scrubber_degradation --agents-mode llm   # Ollama 必須
+ea run scrubber_degradation --agents-mode llm   # Ollama または vLLM
 ea results
 ea doctor
 ```
@@ -387,7 +410,7 @@ ea run scrubber_degradation --agents-mode labeled_rule_base
 
 出力先: `src/experiments/results/scrubber_degradation_labeled_rule_base/`
 
-### LLM チーム（scrubber · `llm`・Ollama 必須）
+### LLM チーム（scrubber · `llm`・Ollama または vLLM 必須）
 
 ```bash
 ea run scrubber_degradation --agents-mode llm

@@ -10,6 +10,7 @@ import sys
 import typer
 
 from core.llm.ollama import resolve_ollama_base_url
+from core.llm.vllm import resolve_vllm_base_url, vllm_auth_headers
 from scenario.jobs.resolve import RESULTS_ROOT_ENV_VAR, default_results_root
 from tools.cli import exit_codes
 from tools.cli.output import print_doctor_report
@@ -120,14 +121,30 @@ def doctor() -> None:
 
     ollama_url = resolve_ollama_base_url()
     report["ollama_url"] = ollama_url
+    vllm_url = resolve_vllm_base_url()
+    report["vllm_url"] = vllm_url
     try:
         import requests
 
-        response = requests.get(f"{ollama_url}/api/tags", timeout=2)
-        response.raise_for_status()
-        report["ollama"] = "reachable"
-    except Exception as exc:
+        try:
+            response = requests.get(f"{ollama_url}/api/tags", timeout=2)
+            response.raise_for_status()
+            report["ollama"] = "reachable"
+        except Exception as exc:
+            report["ollama"] = f"unreachable ({exc.__class__.__name__})"
+        try:
+            response = requests.get(
+                f"{vllm_url}/models",
+                headers=vllm_auth_headers(),
+                timeout=2,
+            )
+            response.raise_for_status()
+            report["vllm"] = "reachable"
+        except Exception as exc:
+            report["vllm"] = f"unreachable ({exc.__class__.__name__})"
+    except ImportError as exc:
         report["ollama"] = f"unreachable ({exc.__class__.__name__})"
+        report["vllm"] = f"unreachable ({exc.__class__.__name__})"
 
     print_doctor_report(report)
     if not python_ok:

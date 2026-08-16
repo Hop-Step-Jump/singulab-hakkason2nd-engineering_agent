@@ -429,3 +429,166 @@ def test_llm_design_parse_rejects_unknown_action_profile_fields():
     assert changes == []
     assert notes
 
+
+def test_action_rep_ids_default_is_single_rep():
+    team = SsosEclssLoopTeam(_team_config())
+    assert team.max_actions_per_step == 1
+    assert team._action_rep_ids(0) == [team._action_rep_id(0)]
+    assert team._action_rep_ids(1) == [team._action_rep_id(1)]
+
+
+def test_action_rep_ids_rotates_window():
+    cfg = _team_config()
+    cfg["team"] = {"count": 4, "id_prefix": "op", "persona": "operator"}
+    cfg["max_actions_per_step"] = 2
+    team = SsosEclssLoopTeam(cfg)
+    assert team.max_actions_per_step == 2
+    assert team._action_rep_ids(0) == ["op_1", "op_2"]
+    assert team._action_rep_ids(1) == ["op_2", "op_3"]
+    assert team._action_rep_ids(3) == ["op_4", "op_1"]
+    assert team._action_rep_id(0) == "op_1"
+
+
+def test_max_actions_per_step_accepts_integral_float():
+    cfg = _team_config()
+    cfg["max_actions_per_step"] = 2.0
+    team = SsosEclssLoopTeam(cfg)
+    assert team.max_actions_per_step == 2
+
+
+def test_max_actions_per_step_clamped_to_team_count():
+    cfg = _team_config()
+    cfg["max_actions_per_step"] = 99
+    team = SsosEclssLoopTeam(cfg)
+    assert team.max_actions_per_step == 2
+    assert team._action_rep_ids(0) == ["op_1", "op_2"]
+
+
+@pytest.mark.parametrize("bad", [0, -1, "nope", None, 2.9, True, "2.9"])
+def test_max_actions_per_step_rejects_invalid(bad):
+    cfg = _team_config()
+    cfg["max_actions_per_step"] = bad
+    with pytest.raises(ValueError, match="max_actions_per_step"):
+        SsosEclssLoopTeam(cfg)
+
+
+def test_labeled_mode_still_uses_one_policy_rep_when_max_actions_is_higher():
+    cfg = _team_config()
+    cfg["max_actions_per_step"] = 2
+    team = SsosEclssLoopTeam(cfg)
+    backend = LoopMockEclssBackend(
+        {
+            "simulation": {"initial_co2_storage_kg": 1.7, "initial_o2_storage_kg": 0.5},
+            "mock_dynamics": {},
+        }
+    )
+    snap = backend.poll_telemetry()
+    obs = EclssLoopObservation(step=0, telemetry=snap, health={"overall": "warning"})
+    outcome = team.run_step(backend, obs)
+    assert len(outcome.commands) == 1
+    assert outcome.commands[0].kind == "air_revitalisation"
+    assert outcome.commands[0].issued_by == "op_1"
+
+
+def test_llm_step_runs_multiple_action_reps(monkeypatch):
+    import json
+
+    action_prompts: list[str] = []
+
+    class FakeClient:
+        def generate(self, prompt: str) -> str:
+            if "phase: action" in prompt.lower():
+                action_prompts.append(prompt)
+                return json.dumps(
+                    {
+                        "message": "dispatch ARS",
+                        "reasoning": "test",
+                        "commands": [
+                            {
+                                "kind": "air_revitalisation",
+                                "payload": {
+                                    "initial_co2_mass": 1.8,
+                                    "initial_moisture_content": 25.0,
+                                    "initial_contaminants": 5.0,
+                                },
+                            }
+                        ],
+                    }
+                )
+            return json.dumps({"message": "watching", "reasoning": "test"})
+
+    monkeypatch.setattr(
+        SsosEclssLoopTeam,
+        "_build_llm_client",
+        staticmethod(lambda _: FakeClient()),
+    )
+    cfg = _team_config()
+    cfg["mode"] = "llm"
+    cfg["llm"] = {}
+    cfg["team"] = {"count": 4, "id_prefix": "op", "persona": "operator"}
+    cfg["max_actions_per_step"] = 2
+    team = SsosEclssLoopTeam(cfg)
+    obs = EclssLoopObservation(
+        step=0,
+        telemetry=EclssTelemetrySnapshot(co2_storage_kg=1.7, o2_storage_kg=0.6),
+        health={"overall": "warning"},
+    )
+    outcome = team._run_step_llm(obs)
+    assert len(action_prompts) == 2
+    assert any("action representative 1 of 2" in p for p in action_prompts)
+    assert any("action representative 2 of 2" in p for p in action_prompts)
+    assert len(outcome.commands) == 2
+    action_msgs = [
+        m for m in outcome.messages if m.metadata.get("deliberation_phase") == "action"
+    ]
+    assert {m.from_role for m in action_msgs} == {"op_1", "op_2"}
+
+
+def test_llm_step_default_single_action_rep(monkeypatch):
+    import json
+
+    action_prompts: list[str] = []
+
+    class FakeClient:
+        def generate(self, prompt: str) -> str:
+            if "phase: action" in prompt.lower():
+                action_prompts.append(prompt)
+                return json.dumps(
+                    {
+                        "message": "dispatch ARS",
+                        "reasoning": "test",
+                        "commands": [
+                            {
+                                "kind": "air_revitalisation",
+                                "payload": {
+                                    "initial_co2_mass": 1.8,
+                                    "initial_moisture_content": 25.0,
+                                    "initial_contaminants": 5.0,
+                                },
+                            }
+                        ],
+                    }
+                )
+            return json.dumps({"message": "watching", "reasoning": "test"})
+
+    monkeypatch.setattr(
+        SsosEclssLoopTeam,
+        "_build_llm_client",
+        staticmethod(lambda _: FakeClient()),
+    )
+    cfg = _team_config()
+    cfg["mode"] = "llm"
+    cfg["llm"] = {}
+    team = SsosEclssLoopTeam(cfg)
+    obs = EclssLoopObservation(
+        step=0,
+        telemetry=EclssTelemetrySnapshot(co2_storage_kg=1.7, o2_storage_kg=0.6),
+        health={"overall": "warning"},
+    )
+    outcome = team._run_step_llm(obs)
+    assert team.max_actions_per_step == 1
+    assert len(action_prompts) == 1
+    assert "team representative" in action_prompts[0]
+    assert len(outcome.commands) == 1
+    assert outcome.commands[0].issued_by == "op_1"
+

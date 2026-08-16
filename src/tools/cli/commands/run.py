@@ -8,9 +8,10 @@ from typing import List, Optional
 
 import typer
 
+from core.llm.factory import VALID_LLM_PROVIDERS, describe_llm_target
 from scenario.jobs.executor import execute_run
 from scenario.jobs.spec import RunSpec
-from scenario.runner import load_scenario_config, scenario_descriptions
+from scenario.runner import load_agents_config, load_scenario_config, scenario_descriptions
 from tools.cli import exit_codes
 from tools.cli.output import print_error, print_run_plan, print_run_result
 from tools.cli.overrides import load_override_file, merge_overrides, parse_set_values
@@ -56,6 +57,16 @@ def run(
         None,
         "--apply-proposals",
         help="Apply design_proposals.json before running (ssos_eclss_loop).",
+    ),
+    llm_provider: Optional[str] = typer.Option(
+        None,
+        "--llm-provider",
+        help="LLM backend for llm mode: ollama (local) or vllm (lab GPU server).",
+    ),
+    llm_model: Optional[str] = typer.Option(
+        None,
+        "--llm-model",
+        help="Override agents.llm.model (Ollama tag or vLLM served-model id).",
     ),
     inject_failures: Optional[bool] = typer.Option(
         None,
@@ -106,10 +117,13 @@ def run(
             steps=steps,
             backend=backend,
             inject_failures=inject_failures,
+            llm_provider=llm_provider,
+            llm_model=llm_model,
             set_values=set_values,
             override_file=override_file,
         )
         overrides = _apply_cli_defaults(scenario_name, overrides)
+        overrides = _materialize_resolved_llm(scenario_name, overrides)
         _validate_merged_overrides(overrides)
     except ValueError as exc:
         print_error(str(exc), hint="Example: --set simulation.steps=30")
@@ -145,6 +159,10 @@ def run(
         extra_lines["apply_proposals"] = str(apply_proposals)
     if inject_failures is not None:
         extra_lines["inject_failures"] = str(inject_failures).lower()
+    if llm_provider:
+        extra_lines["llm_provider"] = llm_provider
+    if llm_model:
+        extra_lines["llm_model"] = llm_model
 
     if not quiet and not json_output:
         print_run_plan(
@@ -160,7 +178,7 @@ def run(
         raise typer.Exit(exit_codes.SUCCESS)
 
     if resolved_mode == "llm":
-        env_code = _preflight_llm()
+        env_code = _preflight_llm(scenario_name, overrides)
         if env_code != exit_codes.SUCCESS:
             raise typer.Exit(env_code)
 
@@ -195,6 +213,8 @@ def _build_overrides(
     inject_failures: Optional[bool],
     set_values: List[str],
     override_file: Optional[Path],
+    llm_provider: Optional[str] = None,
+    llm_model: Optional[str] = None,
 ) -> dict | None:
     parts = []
     if agents_mode is not None:
@@ -215,6 +235,16 @@ def _build_overrides(
         parts.append({"backend": {"kind": backend}})
     if inject_failures is not None:
         parts.append({"inject_failures": inject_failures})
+    if llm_provider is not None:
+        provider = llm_provider.strip().lower()
+        if provider not in VALID_LLM_PROVIDERS:
+            allowed = ", ".join(sorted(VALID_LLM_PROVIDERS))
+            raise ValueError(
+                f"Unsupported LLM provider: {llm_provider!r}. Choose one of: {allowed}"
+            )
+        parts.append({"agents": {"llm": {"provider": provider}}})
+    if llm_model is not None:
+        parts.append({"agents": {"llm": {"model": llm_model}}})
     if set_values:
         parts.append(parse_set_values(set_values))
     if override_file is not None:
@@ -233,6 +263,26 @@ def _apply_cli_defaults(scenario_name: str, overrides: dict | None) -> dict | No
     return merge_overrides(merged, {"backend": {"kind": "ros2"}})
 
 
+def _materialize_resolved_llm(scenario_name: str, overrides: dict | None) -> dict | None:
+    """Bake env/CLI-resolved provider, URL, and model into the RunSpec.
+
+    Host preflight honors ``LLM_PROVIDER`` / ``VLLM_*``, but the SSOS container
+    job only sees ``overrides``. Without this, yaml ``provider: ollama`` wins
+    inside the container after vLLM already passed on the host.
+    """
+    scenario_config = load_scenario_config(scenario_name, overrides)
+    mode = (scenario_config.get("agents") or {}).get("mode", "none")
+    if mode != "llm":
+        return overrides
+    agents_config = load_agents_config(scenario_name, scenario_config) or {}
+    llm_cfg = agents_config.get("llm") or {}
+    provider, base_url, model = describe_llm_target(llm_cfg)
+    return merge_overrides(
+        overrides or {},
+        {"agents": {"llm": {"provider": provider, "base_url": base_url, "model": model}}},
+    )
+
+
 def _validate_merged_overrides(overrides: dict | None) -> None:
     if not overrides:
         return
@@ -248,21 +298,42 @@ def _validate_merged_overrides(overrides: dict | None) -> None:
         raise ValueError(
             f"Unsupported backend kind: {backend_kind!r}. Choose one of: {allowed}"
         )
+    llm_provider = ((overrides.get("agents") or {}).get("llm") or {}).get("provider")
+    if llm_provider is not None:
+        provider = str(llm_provider).strip().lower()
+        if provider not in VALID_LLM_PROVIDERS:
+            allowed = ", ".join(sorted(VALID_LLM_PROVIDERS))
+            raise ValueError(
+                f"Unsupported LLM provider: {llm_provider!r}. Choose one of: {allowed}"
+            )
 
 
-def _preflight_llm() -> int:
-    import requests
+def _preflight_llm(scenario_name: str, overrides: dict | None) -> int:
+    from core.llm.factory import build_llm_client, describe_llm_target
 
-    from core.llm.ollama import resolve_ollama_base_url
-
-    base_url = resolve_ollama_base_url()
+    scenario_config = load_scenario_config(scenario_name, overrides)
+    agents_config = load_agents_config(scenario_name, scenario_config) or {}
+    llm_cfg = agents_config.get("llm", {}) or {}
     try:
-        response = requests.get(f"{base_url}/api/tags", timeout=2)
-        response.raise_for_status()
-    except Exception:
+        provider, base_url, model = describe_llm_target(llm_cfg)
+        client = build_llm_client(llm_cfg)
+    except ValueError as exc:
+        print_error(str(exc), hint="Use --llm-provider ollama or vllm")
+        return exit_codes.USER_ERROR
+    if client.check_connection():
+        return exit_codes.SUCCESS
+    if provider == "vllm":
+        print_error(
+            "vLLM is not reachable for llm mode.",
+            hint=(
+                "Connect to the lab LAN or VPN and retry, or run: ea doctor\n"
+                f"Expected: {base_url}  model: {model}\n"
+                "Override with VLLM_BASE_URL or --set agents.llm.base_url=..."
+            ),
+        )
+    else:
         print_error(
             "Ollama is not reachable for llm mode.",
             hint=f"Start Ollama and retry, or run: ea doctor\nExpected: {base_url}",
         )
-        return exit_codes.ENVIRONMENT_ERROR
-    return exit_codes.SUCCESS
+    return exit_codes.ENVIRONMENT_ERROR

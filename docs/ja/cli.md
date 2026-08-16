@@ -20,7 +20,7 @@ ea run
 引数なしの `ea run` は次を実行します:
 
 - シナリオ: `scrubber_degradation`
-- エージェント: `labeled_rule_base`（Ollama 不要）
+- エージェント: `labeled_rule_base`（Ollama / vLLM 不要）
 - ステップ数: `scenario.yaml` の値（デフォルト 50）
 
 `scenario.yaml` と同じ物理のみ実行にする場合は `--agents-mode none` を指定します。
@@ -32,7 +32,7 @@ ea run
 | `ea run [SCENARIO]` | 1回シミュレーション実行 |
 | `ea scenarios` | 利用可能なシナリオ一覧 |
 | `ea results [RUN_ID]` | 直近 run 一覧、または `summary.json` 表示 |
-| `ea doctor` | Python 3.11+・依存関係・Docker/SSOS マウント・Ollama の確認 |
+| `ea doctor` | Python 3.11+・依存関係・Docker/SSOS マウント・Ollama・vLLM の確認 |
 | `ea job run SPEC.json` | シリアライズ済み `RunSpec` を実行（クラスタワーカー互換） |
 | `ea --version` | CLI バージョン表示 |
 
@@ -47,6 +47,7 @@ python3 -m tools.cli run scrubber_degradation --agents-mode none
 ```bash
 ea run scrubber_degradation --agents-mode labeled_rule_base --steps 30
 ea run ssos_eclss_loop --backend mock --agents-mode none --steps 4
+ea run scrubber_degradation --agents-mode llm --llm-provider vllm
 ea run scrubber_degradation --set simulation.steps=10
 ea run --dry-run --write-spec /tmp/job.json
 ea job run /tmp/job.json
@@ -104,7 +105,7 @@ ea results
 | `src` → `/ea/src` | コード |
 | `experiments/results` → `/ea/results` | 成果物（ホストに直接書き込み） |
 
-LLM エージェントを使う場合は Ollama をホストで起動したうえで `--agents-mode llm` に変更。headless 用の第 2 ターミナルは不要です。
+LLM エージェントを使う場合はホストの Ollama、または研究室 LAN/VPN 上の vLLM（`--llm-provider vllm`）を指定して `--agents-mode llm` に変更。headless 用の第 2 ターミナルは不要です。
 
 ### 2 回目以降：シミュレーションのみ（コマンド一式）
 
@@ -140,6 +141,7 @@ ea results
 ```bash
 ea run ssos_eclss_loop --backend mock --agents-mode labeled_rule_base --steps 8
 ea run ssos_eclss_loop --backend plant_sim --agents-mode labeled_rule_base --steps 72
+ea run ssos_eclss_loop --backend mock --agents-mode llm --set agents.max_actions_per_step=8
 ```
 
 `plant_sim` は乗員代謝・WRS 水循環・物質収支 ledger を再現 — [Plant Sim backend 解説](memo/ssos_eclss_loop/plant_sim_backend.md)。
@@ -152,6 +154,8 @@ ea run ssos_eclss_loop --backend plant_sim --agents-mode labeled_rule_base --ste
 | `EA_MOUNT_SRC` | `/ea/src` | コンテナ内の src マウントパス |
 | `EA_MOUNT_RESULTS` | `/ea/results` | コンテナ内の results マウントパス |
 | `EA_HEADLESS_POLL_TIMEOUT_S` | `120` | headless 起動後の ros2 グラフ待ち（秒） |
+
+`LLM_PROVIDER`、`VLLM_BASE_URL`、`VLLM_MODEL`、`VLLM_API_KEY`、`VLLM_API_TIMEOUT` はコンテナへ転送され、ros2 の llm ジョブがホスト preflight と同じバックエンドを使う。
 
 ### exit code 3（環境エラー）
 

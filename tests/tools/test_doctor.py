@@ -31,9 +31,38 @@ def test_doctor_exits_with_environment_error_on_old_python(monkeypatch):
     monkeypatch.setattr(doctor_cmd.sys, "version_info", (3, 9, 6))
     monkeypatch.setattr(doctor_cmd.sys, "version", "3.9.6 (test)", raising=False)
     monkeypatch.setattr(doctor_cmd.shutil, "which", lambda _: None)
+    monkeypatch.setattr(
+        "requests.get",
+        lambda *args, **kwargs: (_ for _ in ()).throw(ConnectionError("down")),
+    )
     result = runner.invoke(app, ["doctor"])
     assert result.exit_code == 3
     assert "unsupported" in result.output
+
+
+def test_doctor_reports_vllm_probe(monkeypatch):
+    monkeypatch.setattr(doctor_cmd.shutil, "which", lambda _: None)
+    monkeypatch.delenv("VLLM_BASE_URL", raising=False)
+    monkeypatch.delenv("VLLM_API_KEY", raising=False)
+
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            raise ConnectionError("down")
+
+    captured = {}
+
+    def fake_get(url, *args, **kwargs):
+        captured[url] = kwargs
+        return FakeResponse()
+
+    monkeypatch.setattr("requests.get", fake_get)
+    result = runner.invoke(app, ["doctor"])
+    assert result.exit_code == 0
+    assert "vllm_url" in result.output
+    assert "10.10.0.108:8000/v1" in result.output
+    assert "vllm: unreachable" in result.output
+    vllm_call = next(kwargs for url, kwargs in captured.items() if url.endswith("/models"))
+    assert vllm_call["headers"]["Authorization"] == "Bearer dummy"
 
 
 def test_docker_status_not_installed(monkeypatch):

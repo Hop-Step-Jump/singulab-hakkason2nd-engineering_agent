@@ -95,11 +95,11 @@ SSOS の ECLSS は、閉鎖環境の **CO₂ 除去（ARS）**、**O₂ 生成�
 
 **re-arm**: ARS / OGS を打った後もストレージが改善しなければ、次 step で再試行可能（`co2_at_ars_dispatch` / `o2_at_ogs_dispatch` 境界）。
 
-step は 0-based（`0 .. steps-1`）。代表オペレータ `eclss_operator_{step % N}` がその step のコマンドを発行。事後は代表が `design_proposals.json`（`ssos_graph`）を出力。
+step は 0-based（`0 .. steps-1`）。代表オペレータ `eclss_operator_{step % N}` がその step のコマンドを発行（policy 代表は 1 体。`max_actions_per_step` は使わない）。事後は代表が `design_proposals.json`（`ssos_graph`）を出力。
 
 ### llm
 
-各 step: 全 N 体 deliberation → 代表が `operational_command`（JSON `commands`）→ 事後 1 回で `changes` 提案。`policy` 閾値はプロンプトに含めない（scrubber と同様）。
+各 step: 全 N 体 deliberation を並列 → `agents.max_actions_per_step` 体までの回転代表が `operational_command`（JSON `commands`）を並列発行 → 事後 1 回で `changes` 提案。既定は 1（従来どおり）。`policy` 閾値はプロンプトに含めない（scrubber と同様）。1 体の代表が ARS + OGS など複数 kind を返すのは従来どおり。このパラメータは **コマンドを出すエージェント数** であり、1 体の `commands` リストの上限ではない。
 
 ---
 
@@ -108,7 +108,7 @@ step は 0-based（`0 .. steps-1`）。代表オペレータ `eclss_operator_{st
 | ファイル | 用途 |
 | --- | --- |
 | [`scenario.yaml`](https://github.com/hirototamura/engineering_agents/blob/main/src/scenario/ssos_eclss_loop/scenario.yaml) | step 数、初期ストレージ、backend 種別、閾値、`agents.mode`、run ID |
-| [`agents.yaml`](https://github.com/hirototamura/engineering_agents/blob/main/src/scenario/ssos_eclss_loop/agents.yaml) | チーム（`eclss_operator_*`）、Persona、`policy`（labeled のみ）、Ollama |
+| [`agents.yaml`](https://github.com/hirototamura/engineering_agents/blob/main/src/scenario/ssos_eclss_loop/agents.yaml) | チーム（`eclss_operator_*`）、Persona、`policy`（labeled のみ）、Ollama / vLLM |
 
 ### scenario.yaml（主要項目）
 
@@ -142,12 +142,15 @@ subsystem_failures:
 
 agents:
   mode: none  # none | labeled_rule_base | llm
+  max_actions_per_step: 1  # llm のみ。deliberation 後、この人数まで運用コマンドを発行
 
 output:
   run_id: ssos_eclss_loop_baseline
   run_id_labeled_rule_base: ssos_eclss_loop_labeled_rule_base
   run_id_llm: ssos_eclss_loop_llm
 ```
+
+CLI: `--set agents.max_actions_per_step=8`（`team.count` でクランプ）。`labeled_rule_base` では無視される。
 
 `ssos_graph.rewires`（任意）— 前 run の `graph_rewire` 提案を `--apply-proposals` でマージすると、次 run の `Ros2EclssBridge` に client remap が渡る。
 
@@ -232,7 +235,7 @@ ROS launch ファイル側の remap（Phase 8）は [backlog BL-003](memo/backlo
 | --- | --- |
 | ID | `eclss_operator_1` … `eclss_operator_N`（デフォルト 3） |
 | deliberation | llm: 全員 1 ラウンド。labeled: 運用判断メッセージ |
-| action rep | `eclss_operator_{step % N}`（0-based steps） |
+| action reps | llm: `eclss_operator_{step % N}` から `max_actions_per_step` 体の回転窓（既定 1）。labeled: policy 代表 1 体 |
 | post-run rep | 最終 step の代表が `design_proposals.json`（`changes` 非空のときのみ） |
 
 `SsosEclssLoopTeam` は `Team` ABC を継承。`run_step(backend, obs)` / `apply_outcome(backend, outcome)` シグネチャ。

@@ -276,3 +276,62 @@ def test_run_writes_duration_wall_s(tmp_path: Path):
     summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
     assert "duration_wall_s" in summary
     assert summary["duration_wall_s"] >= 0
+
+
+def test_run_rejects_invalid_llm_provider():
+    result = runner.invoke(
+        app,
+        ["run", "scrubber_degradation", "--llm-provider", "llamacpp", "--dry-run"],
+    )
+    assert result.exit_code == 2
+    assert "Unsupported LLM provider" in result.output
+
+
+def test_run_llm_provider_vllm_dry_run_writes_spec(tmp_path: Path):
+    spec_path = tmp_path / "spec.json"
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "scrubber_degradation",
+            "--agents-mode",
+            "llm",
+            "--llm-provider",
+            "vllm",
+            "--llm-model",
+            "qwen3-32b",
+            "--dry-run",
+            "--write-spec",
+            str(spec_path),
+        ],
+    )
+    assert result.exit_code == 0
+    payload = json.loads(spec_path.read_text(encoding="utf-8"))
+    assert payload["overrides"]["agents"]["mode"] == "llm"
+    assert payload["overrides"]["agents"]["llm"]["provider"] == "vllm"
+    assert payload["overrides"]["agents"]["llm"]["model"] == "qwen3-32b"
+    assert payload["overrides"]["agents"]["llm"]["base_url"].endswith("/v1")
+
+
+def test_run_llm_provider_from_env_writes_spec(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDER", "vllm")
+    monkeypatch.delenv("VLLM_BASE_URL", raising=False)
+    monkeypatch.delenv("VLLM_MODEL", raising=False)
+    spec_path = tmp_path / "spec.json"
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "scrubber_degradation",
+            "--agents-mode",
+            "llm",
+            "--dry-run",
+            "--write-spec",
+            str(spec_path),
+        ],
+    )
+    assert result.exit_code == 0
+    payload = json.loads(spec_path.read_text(encoding="utf-8"))
+    assert payload["overrides"]["agents"]["llm"]["provider"] == "vllm"
+    assert payload["overrides"]["agents"]["llm"]["model"] == "qwen3-8b"
+    assert "10.10.0.108:8000" in payload["overrides"]["agents"]["llm"]["base_url"]

@@ -61,7 +61,7 @@ Life-support simulation phases are the same. Recovery **order, timing, and utter
 | File | Purpose |
 | --- | --- |
 | [`scenario.yaml`](https://github.com/hirototamura/engineering_agents/blob/main/src/scenario/scrubber_degradation/scenario.yaml) | Step count, initial state, design parameters, anomaly, `agents.mode`, run ID |
-| [`agents.yaml`](https://github.com/hirototamura/engineering_agents/blob/main/src/scenario/scrubber_degradation/agents.yaml) | Team, Persona, memory, `policy` (labeled only), Ollama settings |
+| [`agents.yaml`](https://github.com/hirototamura/engineering_agents/blob/main/src/scenario/scrubber_degradation/agents.yaml) | Team, Persona, memory, `policy` (labeled only), Ollama / vLLM settings |
 
 ### scenario.yaml (main fields)
 

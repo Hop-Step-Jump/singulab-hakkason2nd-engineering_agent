@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Iterable, Optional, Tuple
 
 
-# Multiple thinking-tag conventions seen across Ollama-served models.
+# Multiple thinking-tag conventions seen across Ollama- and vLLM-served models.
 # Closed forms first; unclosed last (so we only strip-to-end if no closer).
 _THINKING_TAG_RE = re.compile(
     r"<(?:think|thinking|thought)>.*?</(?:think|thinking|thought)>",

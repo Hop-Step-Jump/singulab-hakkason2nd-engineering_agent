@@ -42,7 +42,11 @@ policy:
     urine_volume: 2.0
 
 llm:
-  # Host mock: localhost. In SSOS Docker use host.docker.internal (ea-loop sets OLLAMA_BASE_URL).
+  # ollama (local daemon) or vllm (lab GPU server: https://github.com/hirototamura/vllm_server)
+  provider: ollama
+  # Host Ollama: localhost. In SSOS Docker use host.docker.internal (ea-loop sets OLLAMA_BASE_URL).
+  # Lab vLLM: --llm-provider vllm (or LLM_PROVIDER=vllm). Defaults to http://10.10.0.108:8000/v1 / qwen3-8b.
+  # max_concurrency: 100  # in-flight cap; omit for provider/model defaults
   base_url: http://localhost:11434
   model: qwen3.5:9b
   temperature: 0.45

@@ -17,9 +17,11 @@ from core.agents.persona import (
     eclss_operational_action_contract,
     load_team,
     message_contract,
+    run_parallel,
 )
 from core.agents.types import AgentMessage, DeliberationPhase
-from core.llm.ollama import OllamaClient, resolve_ollama_base_url
+from core.llm.base import LLMClient
+from core.llm.factory import build_llm_client
 from environment.ssos.eclss.backend import EclssBackend
 from environment.ssos.eclss.types import ArsGoal, OgsGoal, WrsGoal
 from scenario.agents.eclss_loop_types import (
@@ -41,6 +43,32 @@ _ECLSS_OPERATIONAL_KINDS = frozenset(
 _ARS_GOAL_FIELDS = frozenset({"initial_co2_mass", "initial_moisture_content", "initial_contaminants"})
 _OGS_GOAL_FIELDS = frozenset({"input_water_mass", "iodine_concentration"})
 _WRS_GOAL_FIELDS = frozenset({"urine_volume"})
+
+
+def _resolve_max_actions_per_step(raw: Any, *, team_count: int) -> int:
+    if isinstance(raw, bool) or raw is None:
+        raise ValueError(f"max_actions_per_step must be an integer >= 1, got {raw!r}")
+    if isinstance(raw, int):
+        value = raw
+    elif isinstance(raw, float):
+        if not raw.is_integer():
+            raise ValueError(f"max_actions_per_step must be an integer >= 1, got {raw!r}")
+        value = int(raw)
+    elif isinstance(raw, str):
+        try:
+            as_float = float(raw.strip())
+        except ValueError as exc:
+            raise ValueError(
+                f"max_actions_per_step must be an integer >= 1, got {raw!r}"
+            ) from exc
+        if not as_float.is_integer():
+            raise ValueError(f"max_actions_per_step must be an integer >= 1, got {raw!r}")
+        value = int(as_float)
+    else:
+        raise ValueError(f"max_actions_per_step must be an integer >= 1, got {raw!r}")
+    if value < 1:
+        raise ValueError(f"max_actions_per_step must be >= 1, got {value}")
+    return min(value, team_count)
 
 
 @dataclass
@@ -84,10 +112,22 @@ class SsosEclssLoopTeam(Team):
             )
             for agent_id, persona in self.personas.items()
         }
+        self.max_actions_per_step = _resolve_max_actions_per_step(
+            config.get("max_actions_per_step", 1),
+            team_count=self.team_cfg.count,
+        )
 
     def _action_rep_id(self, step: int) -> str:
         """Round-robin representative for 0-based scenario steps (`step % N`)."""
         return self.team_cfg.agent_ids[step % self.team_cfg.count]
+
+    def _action_rep_ids(self, step: int) -> List[str]:
+        """Rotating window of action representatives (length ``max_actions_per_step``)."""
+        n = self.team_cfg.count
+        k = min(self.max_actions_per_step, n)
+        start = step % n
+        ids = self.team_cfg.agent_ids
+        return [ids[(start + offset) % n] for offset in range(k)]
 
     def run_step(self, backend: EclssBackend, obs: EclssLoopObservation) -> StepEclssOutcome:
         _ = backend
@@ -123,19 +163,27 @@ class SsosEclssLoopTeam(Team):
         outcome = StepEclssOutcome()
         step_discourse: List[AgentMessage] = []
         situation = build_llm_situation(obs)
-
-        for agent_id in self.team_cfg.agent_ids:
-            msg = self._llm_deliberation_turn(
-                obs=obs,
-                agent_id=agent_id,
-                to_role="team",
-                message_type="comment",
-                phase=DeliberationPhase.DELIBERATION,
-                situation=situation,
-                step_discourse=step_discourse,
-                contract=message_contract(),
-                required=("message",),
-            )
+        # Simultaneous round: all agents see prior-step team discourse only, so
+        # vLLM can batch the N in-flight requests instead of walking the roster.
+        team_discourse = self.memory_store.discourse.recent()
+        turns = run_parallel(
+            [
+                self._llm_deliberation_turn(
+                    obs=obs,
+                    agent_id=agent_id,
+                    to_role="team",
+                    message_type="comment",
+                    phase=DeliberationPhase.DELIBERATION,
+                    situation=situation,
+                    step_discourse=[],
+                    team_discourse=team_discourse,
+                    contract=message_contract(),
+                    required=("message",),
+                )
+                for agent_id in self.team_cfg.agent_ids
+            ]
+        )
+        for agent_id, msg in zip(self.team_cfg.agent_ids, turns):
             if msg is not None:
                 outcome.messages.append(msg)
                 step_discourse.append(msg)
@@ -150,10 +198,23 @@ class SsosEclssLoopTeam(Team):
                     )
                 )
 
-        rep = self._action_rep_id(obs.step)
-        action_msgs, action_cmds = self._llm_action_turn(obs, situation, step_discourse, rep)
-        outcome.messages.extend(action_msgs)
-        outcome.commands.extend(action_cmds)
+        reps = self._action_rep_ids(obs.step)
+        action_turns = run_parallel(
+            [
+                self._llm_action_turn(
+                    obs,
+                    situation,
+                    step_discourse,
+                    rep,
+                    n_reps=len(reps),
+                    slot=slot,
+                )
+                for slot, rep in enumerate(reps)
+            ]
+        )
+        for action_msgs, action_cmds in action_turns:
+            outcome.messages.extend(action_msgs)
+            outcome.commands.extend(action_cmds)
         return outcome
 
     def _run_step_labeled(self, obs: EclssLoopObservation) -> StepEclssOutcome:
@@ -363,7 +424,7 @@ class SsosEclssLoopTeam(Team):
 
         return messages, commands
 
-    def _llm_deliberation_turn(
+    async def _llm_deliberation_turn(
         self,
         *,
         obs: EclssLoopObservation,
@@ -373,6 +434,7 @@ class SsosEclssLoopTeam(Team):
         phase: str,
         situation: str,
         step_discourse: List[AgentMessage],
+        team_discourse: List[AgentMessage],
         contract: str,
         required: tuple[str, ...],
     ) -> Optional[AgentMessage]:
@@ -382,9 +444,9 @@ class SsosEclssLoopTeam(Team):
             phase=phase,
             situation=situation,
             step_discourse=step_discourse,
-            team_discourse=self.memory_store.discourse.recent(),
+            team_discourse=team_discourse,
         )
-        parsed = agent.deliberate(
+        parsed = await agent.deliberate_async(
             ctx,
             contract,
             PersonaAgent.phase_hint(phase),
@@ -415,12 +477,14 @@ class SsosEclssLoopTeam(Team):
             metadata=metadata,
         )
 
-    def _llm_action_turn(
+    async def _llm_action_turn(
         self,
         obs: EclssLoopObservation,
         situation: str,
         step_discourse: List[AgentMessage],
         rep: str,
+        n_reps: int = 1,
+        slot: int = 0,
     ) -> Tuple[List[AgentMessage], List[EclssOperationalCommand]]:
         contract = eclss_operational_action_contract()
         agent = self.agents[rep]
@@ -431,10 +495,10 @@ class SsosEclssLoopTeam(Team):
             step_discourse=step_discourse,
             team_discourse=self.memory_store.discourse.recent(),
         )
-        parsed = agent.deliberate(
+        parsed = await agent.deliberate_async(
             ctx,
             contract,
-            PersonaAgent.phase_hint(DeliberationPhase.ACTION),
+            PersonaAgent.action_round_hint(n_reps=n_reps, slot=slot),
             ("commands",),
         )
         if parsed is None:
@@ -749,18 +813,8 @@ class SsosEclssLoopTeam(Team):
         return {"decision_source": "rule"}
 
     @staticmethod
-    def _build_llm_client(llm_cfg: Dict[str, Any]) -> OllamaClient:
-        return OllamaClient(
-            base_url=resolve_ollama_base_url(llm_cfg),
-            model=str(llm_cfg.get("model", "llama3.2")),
-            temperature=float(llm_cfg.get("temperature", 0.45)),
-            max_tokens=int(llm_cfg.get("max_tokens", 512)),
-            repeat_penalty=float(llm_cfg.get("repeat_penalty", 1.1)),
-            repeat_last_n=int(llm_cfg.get("repeat_last_n", 128)),
-            min_p=float(llm_cfg.get("min_p", 0.05)),
-            think=llm_cfg.get("think", False),
-            api_timeout=int(llm_cfg.get("api_timeout", 10)),
-        )
+    def _build_llm_client(llm_cfg: Dict[str, Any]) -> LLMClient:
+        return build_llm_client(llm_cfg)
 
 
 _ECLSS_OPERATIONAL_LEVERS = """\

@@ -65,7 +65,7 @@ ea results
 !!! tip "Remember"
     - Run `ea run` on the **host** only (not inside the container)
     - **Headless restarts before every run** to reset plant state (no manual second terminal)
-    - For LLM agents, start Ollama on the host and pass `--agents-mode llm`
+    - For LLM agents, start Ollama on the host **or** use `--llm-provider vllm` (lab GPU server)
 
 ---
 
@@ -243,7 +243,7 @@ SSOS_E2E=1 ./scripts/run_ssos_regression.sh
 | --- | --- |
 | `--skip-pytest` | Tier 2 only (implies `SSOS_E2E=1`) |
 | `--with-eps` | Use `ssos-headless.sh` and run EPS smoke |
-| `--with-llm` | Also run `ea-loop` in `llm` mode (needs Ollama on host) |
+| `--with-llm` | Also run `ea-loop` in `llm` mode (needs Ollama on host or lab vLLM) |
 | `--use-existing` | Reuse running `SSOS_CONTAINER`; no create/teardown |
 | `--keep-container` | Do not remove managed container on exit |
 | `--steps N` | `ea-loop` simulation steps (default: 5) |

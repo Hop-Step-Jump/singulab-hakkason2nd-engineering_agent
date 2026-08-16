@@ -221,7 +221,7 @@ Roadmap and research memos: [docs/development-plan.md](development-plan.md).
 
 - **Python 3.11+**
 - **Git**
-- **Ollama** (only when using `agents.mode: llm`)
+- **Ollama** or lab **vLLM** (only when using `agents.mode: llm`)
 - **SSOS Docker** (only for `ssos_eclss_loop` **ros2** mode) — [scenario-ssos-eclss-loop.md](scenario-ssos-eclss-loop.md#how-to-run)
 
 ---
@@ -334,7 +334,11 @@ pytest tests/scenario/test_ssos_eclss_loop*.py tests/environment/test_graph_rewi
 python src/scripts/run_tests.py
 ```
 
-### 4. Ollama (for LLM mode)
+### 4. LLM backends (for LLM mode)
+
+`agents.mode: llm` needs one of the following. Default is **Ollama**. Switch with `--llm-provider vllm` or `LLM_PROVIDER=vllm`.
+
+#### Ollama (local)
 
 Install Ollama from [https://ollama.com](https://ollama.com) and start the daemon.
 
@@ -343,11 +347,30 @@ Install Ollama from [https://ollama.com](https://ollama.com) and start the daemo
 ollama pull gemma4:e4b
 
 # To try another model, change llm.model in agents.yaml
-# or override output.run_id_llm after the run for comparison
+# or override with --llm-model
 ollama list
 ```
 
-Default LLM settings are in each scenario's `agents.yaml` (scrubber: [``scrubber_degradation/agents.yaml``](https://github.com/hirototamura/engineering_agents/blob/main/src/scenario/scrubber_degradation/agents.yaml), ssos: [``ssos_eclss_loop/agents.yaml``](https://github.com/hirototamura/engineering_agents/blob/main/src/scenario/ssos_eclss_loop/agents.yaml)). `llm` mode fails if Ollama is not running. Container `ea-loop` defaults to `OLLAMA_BASE_URL=host.docker.internal`.
+Container `ea-loop` defaults to `OLLAMA_BASE_URL=host.docker.internal`.
+
+#### Lab vLLM (GPU server)
+
+The lab box `gpu-sv-008` (`10.10.0.108`) serves OpenAI-compatible APIs. Reachable on the lab LAN or via VPN — not a public address. Do not start another `vllm serve` on that machine. Setup: [hirototamura/vllm_server](https://github.com/hirototamura/vllm_server).
+
+| Use | URL | `model` |
+| --- | --- | --- |
+| Daily deliberation (default) | `http://10.10.0.108:8000/v1` | `qwen3-8b` |
+| Heavier judgment | `http://10.10.0.108:8001/v1` | `qwen3-32b` |
+
+```bash
+ea run scrubber_degradation --agents-mode llm --llm-provider vllm
+ea run scrubber_degradation --agents-mode llm --llm-provider vllm --llm-model qwen3-32b \
+  --set agents.llm.base_url=http://10.10.0.108:8001/v1
+```
+
+Env overrides: `VLLM_BASE_URL`, `VLLM_MODEL`, `VLLM_API_KEY`, `VLLM_API_TIMEOUT`, `LLM_PROVIDER`. SSH tunnel example: `VLLM_BASE_URL=http://127.0.0.1:8000/v1`. `agents.llm.api_timeout` applies to Ollama; vLLM keeps a 300s default unless `VLLM_API_TIMEOUT` is set.
+
+Default LLM settings are in each scenario's `agents.yaml` (scrubber: [``scrubber_degradation/agents.yaml``](https://github.com/hirototamura/engineering_agents/blob/main/src/scenario/scrubber_degradation/agents.yaml), ssos: [``ssos_eclss_loop/agents.yaml``](https://github.com/hirototamura/engineering_agents/blob/main/src/scenario/ssos_eclss_loop/agents.yaml)). `llm` mode fails if the selected backend is not reachable.
 
 ---
 
@@ -375,7 +398,7 @@ python -c "from scenario.runner import run_scenario; print(run_scenario('scrubbe
 
 Output: `src/experiments/results/scrubber_degradation_labeled_rule_base/`
 
-#### LLM team (scrubber · `llm` · Ollama required)
+#### LLM team (scrubber · `llm` · Ollama or vLLM required)
 
 ```bash
 python -c "from scenario.runner import run_scenario; print(run_scenario('scrubber_degradation', overrides={'agents': {'mode': 'llm'}}))"

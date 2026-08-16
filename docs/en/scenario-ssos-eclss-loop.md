@@ -96,11 +96,11 @@ Baseline runs show how storage evolves without agent intervention.
 
 **Re-arm**: If storage does not improve after ARS / OGS, the next step can retry (`co2_at_ars_dispatch` / `o2_at_ogs_dispatch` boundaries).
 
-Steps are 0-based (`0 .. steps-1`). Representative operator `eclss_operator_{step % N}` issues commands for that step. Post-run, the representative outputs `design_proposals.json` (`ssos_graph`).
+Steps are 0-based (`0 .. steps-1`). Representative operator `eclss_operator_{step % N}` issues commands for that step (one policy representative; `max_actions_per_step` does not apply). Post-run, the representative outputs `design_proposals.json` (`ssos_graph`).
 
 ### llm
 
-Each step: all N agents deliberate → representative issues `operational_command` (JSON `commands`) → one post-run `changes` proposal. `policy` thresholds are not included in prompts (same as scrubber).
+Each step: all N agents deliberate in parallel → up to `agents.max_actions_per_step` rotating representatives issue `operational_command` (JSON `commands`) in parallel → one post-run `changes` proposal. Default is 1 (same as before). `policy` thresholds are not included in prompts (same as scrubber). A single representative may still return several command kinds (ARS + OGS); the parameter is the number of action-issuing agents, not a cap on command objects.
 
 ---
 
@@ -109,7 +109,7 @@ Each step: all N agents deliberate → representative issues `operational_comman
 | File | Purpose |
 | --- | --- |
 | [`scenario.yaml`](https://github.com/hirototamura/engineering_agents/blob/main/src/scenario/ssos_eclss_loop/scenario.yaml) | Step count, initial storage, backend kind, thresholds, `agents.mode`, run ID |
-| [`agents.yaml`](https://github.com/hirototamura/engineering_agents/blob/main/src/scenario/ssos_eclss_loop/agents.yaml) | Team (`eclss_operator_*`), Persona, `policy` (labeled only), Ollama |
+| [`agents.yaml`](https://github.com/hirototamura/engineering_agents/blob/main/src/scenario/ssos_eclss_loop/agents.yaml) | Team (`eclss_operator_*`), Persona, `policy` (labeled only), Ollama / vLLM |
 
 ### scenario.yaml (main fields)
 
@@ -143,12 +143,15 @@ subsystem_failures:
 
 agents:
   mode: none  # none | labeled_rule_base | llm
+  max_actions_per_step: 1  # llm only; after deliberation, this many agents may issue commands
 
 output:
   run_id: ssos_eclss_loop_baseline
   run_id_labeled_rule_base: ssos_eclss_loop_labeled_rule_base
   run_id_llm: ssos_eclss_loop_llm
 ```
+
+CLI: `--set agents.max_actions_per_step=8` (clamped to `team.count`). `labeled_rule_base` ignores this field.
 
 `ssos_graph.rewires` (optional) — when merged via `--apply-proposals` from a prior `graph_rewire` proposal, client remaps are passed to `Ros2EclssBridge` on the next run.
 
@@ -233,7 +236,7 @@ ROS launch-file remap (Phase 8): [backlog BL-003](memo/backlog.md#bl-003).
 | --- | --- |
 | IDs | `eclss_operator_1` … `eclss_operator_N` (default 3) |
 | deliberation | llm: one round for all. labeled: operational decision messages |
-| action rep | `eclss_operator_{step % N}` (0-based steps) |
+| action reps | llm: rotating window of `max_actions_per_step` agents from `eclss_operator_{step % N}` (default 1). labeled: one policy rep |
 | post-run rep | Representative at final step outputs `design_proposals.json` when `changes` is non-empty |
 
 `SsosEclssLoopTeam` extends the `Team` ABC. Signatures: `run_step(backend, obs)` / `apply_outcome(backend, outcome)`.

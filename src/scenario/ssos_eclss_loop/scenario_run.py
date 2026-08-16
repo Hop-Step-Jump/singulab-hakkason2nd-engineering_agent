@@ -393,6 +393,8 @@ class SsosEclssLoopScenario(Scenario):
         if isinstance(team, SsosEclssLoopTeam) and team.mode in {"labeled_rule_base", "llm"}:
             summary["team_count"] = team.team_cfg.count
             summary["agent_ids"] = list(team.team_cfg.agent_ids)
+            if team.mode == "llm":
+                summary["max_actions_per_step"] = team.max_actions_per_step
             proposals = team.propose_post_run_design(summary)
             # L8/B: only persist when there is at least one change so
             # --apply-proposals never no-ops from an empty document.

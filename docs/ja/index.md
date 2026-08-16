@@ -5,7 +5,7 @@
 !!! tip "必要なもの"
     - 全プラットフォームで **Python 3.11+** と **Git**
     - `ssos_eclss_loop` の `--backend ros2`（実 SSOS プラント）のみ **Docker**
-    - `--agents-mode llm` のみ **Ollama**
+    - `--agents-mode llm` のみ **Ollama** または研究室 **vLLM**
 
 ---
 
@@ -93,7 +93,7 @@ ea results
 | `ea run [SCENARIO]` | 1 回シミュレーション |
 | `ea scenarios` | シナリオ一覧 |
 | `ea results [RUN_ID]` | 直近 run または `summary.json` 表示 |
-| `ea doctor` | Python・依存・Docker/SSOS・Ollama の確認 |
+| `ea doctor` | Python・依存・Docker/SSOS・Ollama・vLLM の確認 |
 
 モジュール形式（同等）:
 
@@ -132,7 +132,7 @@ ea results
 | [scrubber_degradation](scenario-scrubber-degradation.md) | Python モック上の CO₂ スクラバー異常 | `StationSimulator` | `ea run scrubber_degradation --agents-mode labeled_rule_base` |
 | [ssos_eclss_loop](scenario-ssos-eclss-loop.md) | SSOS ECLSS（ARS/OGS/WRS）のエージェント運用 | `mock` / `ros2` | `ea run ssos_eclss_loop --backend mock --agents-mode labeled_rule_base` |
 
-両シナリオでエージェントモードは共通: **`none`** / **`labeled_rule_base`**（再現性の高い回帰）/ **`llm`**（Ollama）。
+両シナリオでエージェントモードは共通: **`none`** / **`labeled_rule_base`**（再現性の高い回帰）/ **`llm`**（Ollama または研究室 vLLM）。
 
 ---
 

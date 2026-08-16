@@ -1,5 +1,5 @@
 from core.agents.base import DeliberationContext, Persona
-from core.agents.persona import PersonaPromptBuilder, load_team, message_contract
+from core.agents.persona import PersonaAgent, PersonaPromptBuilder, load_team, message_contract
 from core.agents.types import AgentMessage, DeliberationPhase
 from scenario.agents.scrubber_degradation_team import build_llm_situation
 from scenario.agents.types import AgentObservation
@@ -50,6 +50,17 @@ def test_load_team_builds_engineer_ids():
     assert team.agent_ids == ("engineer_1", "engineer_2", "engineer_3")
     assert team.action_rep_id(1) == "engineer_1"
     assert team.action_rep_id(2) == "engineer_2"
+
+
+def test_action_round_hint_default_matches_single_rep():
+    assert "team representative" in PersonaAgent.action_round_hint()
+    assert PersonaAgent.phase_hint(DeliberationPhase.ACTION) == PersonaAgent.action_round_hint()
+
+
+def test_action_round_hint_names_slot_when_multiple_reps():
+    hint = PersonaAgent.action_round_hint(n_reps=8, slot=2)
+    assert "action representative 3 of 8" in hint
+    assert "simultaneous" in hint
 
 
 def test_llm_situation_has_telemetry_and_world_state_without_policy():

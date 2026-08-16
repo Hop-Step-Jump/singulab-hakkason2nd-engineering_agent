@@ -65,7 +65,7 @@ ea results
 !!! tip "覚えておくこと"
     - `ea run` は **ホスト専用**（コンテナ内では `ea` は使わない）
     - **毎 run 前に headless を再起動**し、プラント状態を初期化（手動の第 2 ターミナル不要）
-    - LLM 利用時はホストで Ollama を起動し `--agents-mode llm` を指定
+    - LLM 利用時はホストで Ollama を起動するか、`--llm-provider vllm`（研究室 GPU サーバー）を指定
 
 ---
 
@@ -243,7 +243,7 @@ SSOS_E2E=1 ./scripts/run_ssos_regression.sh
 | --- | --- |
 | `--skip-pytest` | Tier 2 のみ（`SSOS_E2E=1` と同等） |
 | `--with-eps` | `ssos-headless.sh` を使い EPS smoke を追加 |
-| `--with-llm` | `llm` モードの `ea-loop` も実行（ホストに Ollama が必要） |
+| `--with-llm` | `llm` モードの `ea-loop` も実行（ホストの Ollama または研究室 vLLM） |
 | `--use-existing` | 起動中の `SSOS_CONTAINER` を再利用。作成/削除しない |
 | `--keep-container` | 終了時に管理コンテナを削除しない |
 | `--steps N` | `ea-loop` のシミュレーションステップ数（デフォルト: 5） |

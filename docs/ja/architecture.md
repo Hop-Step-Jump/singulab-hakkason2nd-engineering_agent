@@ -84,7 +84,7 @@ flowchart TB
     REB["Ros2EclssBridge<br/>(ros2)"]
   end
 
-  core["core/<br/>PersonaAgent, Team ABC, memory, Ollama"]
+  core["core/<br/>PersonaAgent, Team ABC, memory, Ollama/vLLM"]
   OP["integrations/one_piece/<br/>provenance export"]
 
   tools --> scenario
@@ -133,7 +133,7 @@ src/integrations/   （scenario から呼び出し）
 | ------------ | ---------------------------------------- |
 | `team.count` | オペレータ数（scrubber デフォルト 4、ssos デフォルト 3）    |
 | `team.archetypes` | 任意。思考レンズ名のリスト（scrubber デフォルト 4 種）。`agent_id` へ round-robin 割当。省略または `[]` で従来の同種チーム |
-| deliberation | llm: 全員 1 ラウンド（archetype ありならレンズ + 共有 persona）。labeled: ルールが定型メッセージ      |
+| deliberation | llm: 全員 1 ラウンドを同時（並列）実行。labeled: ルールが定型メッセージ      |
 | action rep   | step ごとに `(step-1) % N` で代表がコマンド発行       |
 | post-run rep | 最終 step の代表が `design_proposals.json` を出力 |
 | 設計分離         | **ランタイム中は恒久グラフを変えない**。事後提案のみ             |
@@ -165,7 +165,7 @@ src/integrations/   （scenario から呼び出し）
 | ------------------- | --------------------------------- |
 | `none`              | バックエンドのみ（エージェントなし）                |
 | `labeled_rule_base` | `policy` / 閾値駆動                   |
-| `llm`               | Ollama deliberation + 代表 action   |
+| `llm`               | Ollama または研究室 vLLM の deliberation + 代表 action   |
 | `base`              | 未実装（[BL-001](memo/backlog.md)） |
 
 
@@ -620,7 +620,7 @@ SsosEclssLoopTeam                         # scenario/agents/ssos_eclss_loop_team
 | ------------------- | -------------------------- | ------------ | ---------------------------------- |
 | `none`              | poll のみ                    | —            | `test_ssos_eclss_loop_scenario.py` |
 | `labeled_rule_base` | 閾値 → ARS/OGS               | `ssos_graph` | `test_ssos_eclss_loop_team.py`     |
-| `llm`               | deliberation + operational | LLM changes  | 同上                                 |
+| `llm`               | N 体 deliberation の後、最大 `max_actions_per_step` 体が action | LLM changes  | 同上                                 |
 
 
 #### labeled_rule_base
@@ -638,7 +638,7 @@ SsosEclssLoopTeam                         # scenario/agents/ssos_eclss_loop_team
 
 #### llm
 
-scrubber と同パターン。プロンプトにはストレージ kg とヘルス状態（policy なし）。
+N 体同時 deliberation のあと、`agents.max_actions_per_step` 体までの回転代表（既定 1）が運用コマンドを並列発行。プロンプトにはストレージ kg とヘルス状態（policy なし）。`--set agents.max_actions_per_step=8` で上書き可。
 
 ### 出力・ダッシュボード
 
@@ -647,6 +647,7 @@ scrubber と同パターン。プロンプトにはストレージ kg とヘル�
 | ----------------------------------- | --------------------- |
 | `summary.backend`                   | `mock` / `ros2`       |
 | `summary.operational_command_count` | 運用コマンド数               |
+| `summary.max_actions_per_step`      | llm: step あたりの action 代表数 |
 | `events.jsonl`                      | `operational_applied` |
 
 
@@ -675,6 +676,7 @@ run ID: `ssos_eclss_loop_{baseline|labeled_rule_base|llm}`
 | SSOS EPS（scrubber 電力）  | scrubber | ✅ `environment/ssos/eps/ros2/` — `Ros2EpsBridge`（`eps.backend: ros2` で任意） |
 | SSOS EPS（eclss loop）   | ssos     | — 未接続。`ssos/eps/ros2/` は eclss loop とは別 |
 | Ollama                 | 両方       | ✅ コンテナは `host.docker.internal` |
+| 研究室 vLLM              | 両方       | ✅ `http://10.10.0.108:8000/v1`（`qwen3-8b`）。LAN または VPN |
 | One Piece Web UI       | —        | スコープ外                          |
 
 

@@ -9,7 +9,7 @@ on:
         type: boolean
         default: false
       with_llm:
-        description: Include ea-loop llm mode (needs Ollama on host)
+        description: Include ea-loop llm mode (needs Ollama or lab vLLM)
         type: boolean
         default: false
       use_existing:

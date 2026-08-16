@@ -85,7 +85,7 @@ flowchart TB
     REB["Ros2EclssBridge<br/>(ros2)"]
   end
 
-  core["core/<br/>PersonaAgent, Team ABC, memory, Ollama"]
+  core["core/<br/>PersonaAgent, Team ABC, memory, Ollama/vLLM"]
   OP["integrations/one_piece/<br/>provenance export"]
 
   tools --> scenario
@@ -131,7 +131,7 @@ Extends `Team` ABC. **Homogeneous N agents + representative action**, not rigid 
 | --- | --- |
 | `team.count` | Operator count (scrubber default 4, ssos default 3) |
 | `team.archetypes` | Optional list of thinking lenses (scrubber default: all four). Round-robin onto `agent_id`s. Omit or `[]` for legacy homogeneous team |
-| deliberation | llm: one round for all (archetype lens + shared persona when set). labeled: rule-driven fixed messages |
+| deliberation | llm: one simultaneous (parallel) round for all. labeled: rule-driven fixed messages |
 | action rep | Representative issues commands each step via `(step-1) % N` |
 | post-run rep | Representative at final step outputs `design_proposals.json` |
 | Design separation | **No permanent graph changes at runtime**. Post-run proposals only |
@@ -175,7 +175,7 @@ Details: [memo/agents/homogeneous_agent_team_plan.md](memo/agents/homogeneous_ag
 | --- | --- |
 | `none` | Backend only (no agents) |
 | `labeled_rule_base` | `policy` / threshold driven |
-| `llm` | Ollama deliberation + representative action |
+| `llm` | Ollama or lab vLLM deliberation + representative action |
 | `base` | Not implemented ([BL-001](memo/backlog.md)) |
 
 **Do not include `policy` thresholds in LLM prompts** (fair comparison experiments).
@@ -606,7 +606,7 @@ SsosEclssLoopTeam                         # scenario/agents/ssos_eclss_loop_team
 | --- | --- | --- | --- |
 | `none` | poll only | — | `test_ssos_eclss_loop_scenario.py` |
 | `labeled_rule_base` | thresholds → ARS/OGS | `ssos_graph` | `test_ssos_eclss_loop_team.py` |
-| `llm` | deliberation + operational | LLM changes | same |
+| `llm` | N-way deliberation, then up to `max_actions_per_step` action reps | LLM changes | same |
 
 #### labeled_rule_base
 
@@ -621,7 +621,7 @@ SsosEclssLoopTeam                         # scenario/agents/ssos_eclss_loop_team
 
 #### llm
 
-Same pattern as scrubber. Prompt includes storage kg and health state (no policy).
+N-way simultaneous deliberation, then up to `agents.max_actions_per_step` rotating representatives (default 1) issue operational commands in parallel. Prompt includes storage kg and health state (no policy). Override with `--set agents.max_actions_per_step=8`.
 
 ### Output and dashboard
 
@@ -629,6 +629,7 @@ Same pattern as scrubber. Prompt includes storage kg and health state (no policy
 | --- | --- |
 | `summary.backend` | `mock` / `ros2` |
 | `summary.operational_command_count` | operational command count |
+| `summary.max_actions_per_step` | llm: action representatives per step |
 | `events.jsonl` | `operational_applied` |
 
 **Not in ssos from scrubber**: `eps_telemetry.jsonl`, ppm-based KPIs.
@@ -653,6 +654,7 @@ Connection details: [memo/ssos_eclss_loop/ssos_eclss_loop_connection_plan.md](me
 | SSOS EPS (scrubber power) | scrubber | ✅ `environment/ssos/eps/ros2/` — `Ros2EpsBridge` (optional via `eps.backend: ros2`) |
 | SSOS EPS (eclss loop) | ssos | — not wired; `ssos/eps/ros2/` is separate from eclss loop |
 | Ollama | both | ✅ container uses `host.docker.internal` |
+| Lab vLLM | both | ✅ `http://10.10.0.108:8000/v1` (`qwen3-8b`); LAN or VPN |
 | One Piece Web UI | — | out of scope |
 
 ---

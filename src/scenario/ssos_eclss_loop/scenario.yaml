@@ -44,6 +44,9 @@ subsystem_failures:
 
 agents:
   mode: none  # none | labeled_rule_base | llm
+  # After llm deliberation, this many agents may issue operational commands (default 1).
+  # Rotates from eclss_operator_{step % N}. Clamped to team.count. labeled_rule_base ignores this.
+  max_actions_per_step: 1
 
 output:
   run_id: ssos_eclss_loop_baseline

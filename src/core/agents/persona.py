@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Awaitable, Dict, List, Optional, Sequence, Tuple, TypeVar
 
 from core.agents.base import DeliberationContext, Persona
 from core.agents.memory import AgentMemory
@@ -309,15 +310,49 @@ class PersonaAgent:
         action_hint: str,
         required: tuple[str, ...],
     ) -> Optional[ParsedTurn]:
-        prompt = PersonaPromptBuilder.build(
+        prompt = self._build_prompt(ctx, contract, action_hint)
+        raw = self._generate(prompt)
+        return self._parse_turn(raw, required)
+
+    async def deliberate_async(
+        self,
+        ctx: DeliberationContext,
+        contract: str,
+        action_hint: str,
+        required: tuple[str, ...],
+    ) -> Optional[ParsedTurn]:
+        prompt = self._build_prompt(ctx, contract, action_hint)
+        raw = await self._generate_async(prompt)
+        return self._parse_turn(raw, required)
+
+    def _build_prompt(
+        self,
+        ctx: DeliberationContext,
+        contract: str,
+        action_hint: str,
+    ) -> str:
+        return PersonaPromptBuilder.build(
             self.persona,
             ctx,
             contract,
             action_hint,
         )
-        raw = ""
-        if self.llm_client is not None:
-            raw = self.llm_client.generate(prompt)
+
+    def _generate(self, prompt: str) -> str:
+        if self.llm_client is None:
+            return ""
+        return self.llm_client.generate(prompt)
+
+    async def _generate_async(self, prompt: str) -> str:
+        if self.llm_client is None:
+            return ""
+        generate_async = getattr(self.llm_client, "generate_async", None)
+        if generate_async is not None:
+            return await generate_async(prompt)
+        return await asyncio.to_thread(self.llm_client.generate, prompt)
+
+    @staticmethod
+    def _parse_turn(raw: str, required: tuple[str, ...]) -> Optional[ParsedTurn]:
         parsed = parse_json_response(raw, required=required)
         if parsed.status in {"fallback", "empty_response"}:
             return None
@@ -333,14 +368,40 @@ class PersonaAgent:
         if phase == DeliberationPhase.DELIBERATION:
             return (
                 "Deliberation: share observations and professional judgment. "
-                "React to Telemetry, World state, and teammates by agent_id."
+                "This round is simultaneous — you do not see other agents' comments "
+                "from this step yet. React to Telemetry, World state, and prior-step "
+                "teammates by agent_id."
             )
         if phase == DeliberationPhase.POST_RUN:
             return (
                 "Post-run design review: simulation is complete. Propose structural changes as "
                 "recommendations only — cite team discourse and run outcomes."
             )
+        return PersonaAgent.action_round_hint()
+
+    @staticmethod
+    def action_round_hint(*, n_reps: int = 1, slot: int = 0) -> str:
+        if n_reps <= 1:
+            return (
+                "Action round (team representative): issue recovery commands when discourse and "
+                "Situation warrant intervention; cite named teammates from this step."
+            )
         return (
-            "Action round (team representative): issue recovery commands when discourse and "
-            "Situation warrant intervention; cite named teammates from this step."
+            f"Action round: you are action representative {slot + 1} of {n_reps} this step. "
+            "Issue operational commands when discourse and Situation warrant intervention; "
+            "cite named teammates from this step. Empty commands if you hold. "
+            "This action round is simultaneous — you do not see other representatives' "
+            "commands from this step."
         )
+
+
+_T = TypeVar("_T")
+
+
+def run_parallel(awaitables: Sequence[Awaitable[_T]]) -> List[_T]:
+    """Run awaitables concurrently and return results in the given order."""
+
+    async def _gather() -> List[_T]:
+        return list(await asyncio.gather(*awaitables))
+
+    return asyncio.run(_gather())

@@ -384,6 +384,7 @@ def test_ssos_eclss_loop_llm_agents_invoke_ars(tmp_path: Path, monkeypatch):
 
     assert summary["agents_mode"] == "llm"
     assert summary["team_count"] == 4
+    assert summary["max_actions_per_step"] == 1
     assert summary["operational_command_count"] >= 1
     assert summary["ars_invoked_step"] == 0
     assert any(m.get("decision_source") == "llm" for m in messages)

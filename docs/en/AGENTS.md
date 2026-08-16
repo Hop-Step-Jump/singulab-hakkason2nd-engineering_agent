@@ -207,7 +207,7 @@ Do not import upper layers from lower layers. Do not put LLM or Persona in `envi
 - Let the verification bridge bypass the simulator and infer “as expected” from design content.
 - In this demo where physical world is N/A, describe virtual pass as **physically verified**.
 - Change permanent topology at runtime, breaking design–verification separation (`apply_design_change` removed in Phase 0).
-- Put agent logic or Ollama dependencies in `environment`.
+- Put agent logic or Ollama / vLLM dependencies in `environment`.
 - Round telemetry or thresholds loosely to force pass.
 
 ### Agent modes (`agents.mode`)
@@ -230,7 +230,7 @@ pytest
 python -c "from scenario.runner import run_scenario; print(run_scenario('scrubber_degradation', overrides={'agents': {'mode': 'labeled_rule_base'}}))"
 ```
 
-LLM mode requires Ollama. Prefer Fake LLM / `labeled_rule_base` for CI and regression.
+LLM mode requires Ollama or the lab vLLM server. Prefer Fake LLM / `labeled_rule_base` for CI and regression.
 
 ---
 
