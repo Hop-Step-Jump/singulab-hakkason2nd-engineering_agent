@@ -65,6 +65,7 @@ ea job run /tmp/job.json
 | `--set KEY=VALUE` | Dot-notation deep override |
 | `--override-file` | YAML/JSON patch merged into scenario config |
 | `--backend` | `mock`, `plant_sim`, or `ros2` (`ssos_eclss_loop` only) |
+| `--inject-failures` / `--no-inject-failures` | Apply the `ssos_eclss_loop` `subsystem_failures` schedule (default: off) |
 | `--apply-proposals` | Apply prior `design_proposals.json` (`ssos_eclss_loop`) |
 | `--seed` | Record a seed in `summary.json` for future sweeps |
 | `--no-recreate` | Keep an existing output directory |

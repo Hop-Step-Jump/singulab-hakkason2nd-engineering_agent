@@ -134,6 +134,13 @@ thresholds:
   o2_storage_low_kg: 0.45
   product_water_low_l: 50.0
 
+# Off by default. Enable with --inject-failures or inject_failures: true
+inject_failures: false
+subsystem_failures:
+  - subsystem: ars   # ars | ogs | wrs
+    start_step: 10   # inclusive (0-based)
+    end_step: 20     # optional, exclusive
+
 agents:
   mode: none  # none | labeled_rule_base | llm
 
@@ -144,6 +151,22 @@ output:
 ```
 
 `ssos_graph.rewires` (optional) — when merged via `--apply-proposals` from a prior `graph_rewire` proposal, client remaps are passed to `Ros2EclssBridge` on the next run.
+
+### Subsystem failure schedule (`subsystem_failures`)
+
+Inject ARS / OGS / WRS failures at chosen steps. **Off by default** (`inject_failures: false`). Enable with `ea run ssos_eclss_loop --inject-failures` or `--set inject_failures=true`. The scenario layer then calls `EclssBackend.set_subsystem_failure` each step; the same YAML works for `mock`, `plant_sim`, and `ros2`.
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `subsystem` | yes | `ars` / `ogs` / `wrs` (`ARS_failure` form also accepted) |
+| `start_step` | yes | Failure onset step (inclusive, 0-based) |
+| `end_step` | no | End step (**exclusive**). If omitted, stays failed until run end |
+| `duration_steps` | no | Alternative to `end_step` (cannot set both; must be >= 1) |
+
+- Any subsystem listed in the schedule is owned by the schedule for the run (cleared when no entry is active).
+- Transitions emit `subsystem_failure_applied` in `events.jsonl`.
+- Telemetry flags (`ars_failure_enabled`, etc.) feed the dashboard anomaly view.
+- Separate from scrubber `anomalies:` / `inject_anomaly` (not an efficiency-decay schedule).
 
 ### agents.yaml (main fields)
 

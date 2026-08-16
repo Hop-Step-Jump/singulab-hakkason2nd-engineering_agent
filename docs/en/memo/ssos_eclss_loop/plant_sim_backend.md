@@ -170,6 +170,7 @@ cabin CO₂ ──► ARS ──► captured CO₂ ──► Sabatier
 ### Failure and validation
 
 - Subsystem failure (`set_subsystem_failure`) blocks mutations for that subsystem's actions.
+- **Timed injection** is scenario-layer `subsystem_failures` in `scenario.yaml` (0-based steps), gated by `inject_failures` (default off; CLI `--inject-failures`). It calls `set_subsystem_failure` for `mock` / `plant_sim` / `ros2`. See [scenario-ssos-eclss-loop.md](../../scenario-ssos-eclss-loop.md#subsystem-failure-schedule-subsystem_failures).
 - Invalid goals (negative, NaN, Inf) are rejected before state changes.
 - Partial grants when inventory or capacity is insufficient; services return `success=False` when the full request cannot be met.
 

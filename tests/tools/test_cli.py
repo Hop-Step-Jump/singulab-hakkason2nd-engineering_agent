@@ -157,6 +157,40 @@ def test_run_ssos_mock_without_docker_allowed(monkeypatch, tmp_path: Path):
     assert (output_dir / "summary.json").exists()
 
 
+def test_run_ssos_inject_failures_flag(monkeypatch, tmp_path: Path):
+    monkeypatch.delenv("EA_RUN_IN_CONTAINER", raising=False)
+    monkeypatch.setattr("tools.cli.ssos_host.shutil.which", lambda _: None)
+    output_dir = tmp_path / "inject-failures"
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "ssos_eclss_loop",
+            "--backend",
+            "mock",
+            "--agents-mode",
+            "none",
+            "--steps",
+            "12",
+            "--inject-failures",
+            "--output-dir",
+            str(output_dir),
+            "--quiet",
+        ],
+    )
+    assert result.exit_code == 0
+    summary = json.loads((output_dir / "summary.json").read_text(encoding="utf-8"))
+    telemetry = [
+        json.loads(line)
+        for line in (output_dir / "telemetry.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    by_step = {row["step"]: row for row in telemetry if not row.get("post_ops")}
+    assert summary["inject_failures"] is True
+    assert by_step[9]["ars_failure_enabled"] is False
+    assert by_step[10]["ars_failure_enabled"] is True
+
+
 def test_run_ssos_plant_sim_without_docker_allowed(monkeypatch, tmp_path: Path):
     monkeypatch.delenv("EA_RUN_IN_CONTAINER", raising=False)
     monkeypatch.setattr("tools.cli.ssos_host.shutil.which", lambda _: None)

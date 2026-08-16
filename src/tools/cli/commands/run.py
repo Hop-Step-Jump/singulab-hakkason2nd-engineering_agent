@@ -57,6 +57,14 @@ def run(
         "--apply-proposals",
         help="Apply design_proposals.json before running (ssos_eclss_loop).",
     ),
+    inject_failures: Optional[bool] = typer.Option(
+        None,
+        "--inject-failures/--no-inject-failures",
+        help=(
+            "Apply the ssos_eclss_loop subsystem_failures schedule. "
+            "Default: off (scenario.yaml inject_failures)."
+        ),
+    ),
     seed: Optional[int] = typer.Option(None, "--seed", help="Record a reproducibility seed."),
     set_values: List[str] = typer.Option(
         [],
@@ -97,6 +105,7 @@ def run(
             agents_mode=agents_mode,
             steps=steps,
             backend=backend,
+            inject_failures=inject_failures,
             set_values=set_values,
             override_file=override_file,
         )
@@ -134,6 +143,8 @@ def run(
         extra_lines["backend"] = backend
     if apply_proposals:
         extra_lines["apply_proposals"] = str(apply_proposals)
+    if inject_failures is not None:
+        extra_lines["inject_failures"] = str(inject_failures).lower()
 
     if not quiet and not json_output:
         print_run_plan(
@@ -181,6 +192,7 @@ def _build_overrides(
     agents_mode: Optional[str],
     steps: Optional[int],
     backend: Optional[str],
+    inject_failures: Optional[bool],
     set_values: List[str],
     override_file: Optional[Path],
 ) -> dict | None:
@@ -201,6 +213,8 @@ def _build_overrides(
                 f"Unsupported backend kind: {backend!r}. Choose one of: {allowed}"
             )
         parts.append({"backend": {"kind": backend}})
+    if inject_failures is not None:
+        parts.append({"inject_failures": inject_failures})
     if set_values:
         parts.append(parse_set_values(set_values))
     if override_file is not None:

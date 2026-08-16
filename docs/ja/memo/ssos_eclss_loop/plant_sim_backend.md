@@ -548,6 +548,7 @@ Plant Simでは、運用エージェントの評価に必要な異常挙動を�
 - WRS failure: WRS actionを停止
 - failure時は対象状態を変更しない
 - serviceは既存在庫の払出であり、subsystem failureとは独立
+- **タイミング指定の注入**は backend ではなくシナリオ層の `subsystem_failures`（`scenario.yaml`、**0-based steps**）が担当する。既定はオフ（`inject_failures: false`）。CLI `--inject-failures` で有効化し、任意 step で `set_subsystem_failure` を呼ぶ（`mock` / `plant_sim` / `ros2` 共通）。詳細は [scenario-ssos-eclss-loop.md](../../scenario-ssos-eclss-loop.md#サブシステム故障スケジュールsubsystem_failures)
 
 ### 不正入力
 

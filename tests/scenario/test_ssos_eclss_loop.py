@@ -50,9 +50,10 @@ def test_ssos_eclss_loop_baseline_runs(tmp_path: Path):
     assert summary["scenario"] == "ssos_eclss_loop"
     assert summary["backend"] == "mock"
     assert summary["agents_mode"] == "none"
-    assert summary["steps"] == 8
-    assert len(telemetry) == 8
-    assert len(health) == 8
+    assert summary["steps"] == 40
+    assert len(telemetry) == 40
+    assert len(health) == 40
+    assert summary["inject_failures"] is False
     assert summary["operational_command_count"] == 0
     assert summary["message_count"] == 0
     assert summary.get("ars_invoked_step") is None
@@ -61,8 +62,34 @@ def test_ssos_eclss_loop_baseline_runs(tmp_path: Path):
     assert not (run_dir / "design_proposals.json").exists()
 
     co2_series = [row["co2_storage_kg"] for row in telemetry]
-    assert co2_series[0] == pytest.approx(1.5)
+    assert co2_series[0] == pytest.approx(1.3)
     assert co2_series[-1] > co2_series[0], "CO2 should rise without agent intervention"
+    assert all(row["ars_failure_enabled"] is False for row in telemetry)
+    assert all(row["ogs_failure_enabled"] is False for row in telemetry)
+
+
+def test_ssos_eclss_loop_yaml_schedule_applies_when_inject_enabled(tmp_path: Path):
+    run_dir = run_scenario(
+        "ssos_eclss_loop",
+        output_dir=tmp_path / "inject_on",
+        overrides={
+            "simulation": {"steps": 21},
+            "agents": {"mode": "none"},
+            "inject_failures": True,
+        },
+        recreate_output=True,
+    )
+    summary = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
+    telemetry = _read_jsonl(run_dir / "telemetry.jsonl")
+    by_step = {row["step"]: row for row in telemetry if not row.get("post_ops")}
+
+    assert summary["inject_failures"] is True
+    assert by_step[9]["ars_failure_enabled"] is False
+    assert by_step[10]["ars_failure_enabled"] is True
+    assert by_step[19]["ars_failure_enabled"] is True
+    assert by_step[20]["ars_failure_enabled"] is False
+    assert by_step[19]["ogs_failure_enabled"] is False
+    assert by_step[20]["ogs_failure_enabled"] is True
 
 
 def test_ssos_eclss_loop_labeled_agents_invoke_ars(tmp_path: Path):
@@ -82,15 +109,16 @@ def test_ssos_eclss_loop_labeled_agents_invoke_ars(tmp_path: Path):
     assert "thresholds" in summary
     assert summary["thresholds"]["co2_storage_high_kg"] == pytest.approx(1.5)
     assert "health_inputs" in summary
-    assert summary["team_count"] == 3
+    assert summary["team_count"] == 4
     assert summary["agent_ids"] == [
         "eclss_operator_1",
         "eclss_operator_2",
         "eclss_operator_3",
+        "eclss_operator_4",
     ]
     assert summary["message_count"] > 0
     assert summary["operational_command_count"] >= 1
-    assert summary["ars_invoked_step"] == 0
+    assert summary["ars_invoked_step"] == 4
 
     message_types = {m["message_type"] for m in messages}
     assert "alert" in message_types
@@ -103,9 +131,9 @@ def test_ssos_eclss_loop_labeled_agents_invoke_ars(tmp_path: Path):
     )
 
     assert telemetry[0]["step"] == 0
-    assert telemetry[0]["co2_storage_kg"] == pytest.approx(1.5)
-    assert telemetry[1]["co2_storage_kg"] < telemetry[0]["co2_storage_kg"], (
-        "ARS should reduce CO2 storage after step 0"
+    assert telemetry[0]["co2_storage_kg"] == pytest.approx(1.3)
+    assert telemetry[5]["co2_storage_kg"] < telemetry[4]["co2_storage_kg"], (
+        "ARS should reduce CO2 storage after step 4"
     )
     assert (run_dir / "design_proposals.json").exists()
     assert summary.get("design_proposal_count", 0) >= 1
@@ -146,8 +174,8 @@ def test_ssos_eclss_loop_labeled_reinvokes_ars_when_co2_reexceeds(tmp_path: Path
     ]
 
     assert summary["operational_command_count"] >= 2
-    assert 0 in ars_steps
-    assert any(step > 0 for step in ars_steps), "ARS should re-fire after CO2 regrows past threshold"
+    assert 4 in ars_steps
+    assert any(step > 4 for step in ars_steps), "ARS should re-fire after CO2 regrows past threshold"
 
 
 def test_ssos_eclss_loop_provenance_includes_operational_records(tmp_path: Path):
@@ -355,7 +383,7 @@ def test_ssos_eclss_loop_llm_agents_invoke_ars(tmp_path: Path, monkeypatch):
     design_proposals = json.loads((run_dir / "design_proposals.json").read_text(encoding="utf-8"))
 
     assert summary["agents_mode"] == "llm"
-    assert summary["team_count"] == 3
+    assert summary["team_count"] == 4
     assert summary["operational_command_count"] >= 1
     assert summary["ars_invoked_step"] == 0
     assert any(m.get("decision_source") == "llm" for m in messages)
@@ -393,6 +421,110 @@ def test_ssos_eclss_loop_skips_empty_design_proposals_file(tmp_path: Path, monke
     assert not (run_dir / "design_proposals.json").exists()
 
 
+def test_ssos_eclss_loop_subsystem_failures_schedule_mock(tmp_path: Path):
+    run_dir = run_scenario(
+        "ssos_eclss_loop",
+        output_dir=tmp_path / "failures_mock",
+        overrides={
+            "simulation": {"steps": 5},
+            "agents": {"mode": "none"},
+            "inject_failures": True,
+            "subsystem_failures": [
+                {"subsystem": "ars", "start_step": 2, "end_step": 4},
+            ],
+        },
+        recreate_output=True,
+    )
+    telemetry = _read_jsonl(run_dir / "telemetry.jsonl")
+    by_step = {row["step"]: row for row in telemetry if not row.get("post_ops")}
+    assert list(by_step) == [0, 1, 2, 3, 4]
+    assert by_step[0]["ars_failure_enabled"] is False
+    assert by_step[1]["ars_failure_enabled"] is False
+    assert by_step[2]["ars_failure_enabled"] is True
+    assert by_step[3]["ars_failure_enabled"] is True
+    assert by_step[4]["ars_failure_enabled"] is False
+
+    events = _read_jsonl(run_dir / "events.jsonl")
+    failure_events = [e for e in events if e.get("kind") == "subsystem_failure_applied"]
+    assert failure_events == [
+        {
+            "step": 2,
+            "kind": "subsystem_failure_applied",
+            "subsystem": "ars",
+            "enabled": True,
+            "source": "subsystem_failures",
+        },
+        {
+            "step": 4,
+            "kind": "subsystem_failure_applied",
+            "subsystem": "ars",
+            "enabled": False,
+            "source": "subsystem_failures",
+        },
+    ]
+
+
+def test_ssos_eclss_loop_subsystem_failures_schedule_plant_sim(tmp_path: Path):
+    run_dir = run_scenario(
+        "ssos_eclss_loop",
+        output_dir=tmp_path / "failures_plant_sim",
+        overrides={
+            "backend": {"kind": "plant_sim"},
+            "simulation": {"steps": 4},
+            "agents": {"mode": "none"},
+            "inject_failures": True,
+            "subsystem_failures": [
+                {"subsystem": "ogs", "start_step": 1, "duration_steps": 2},
+                {"subsystem": "wrs", "start_step": 2},
+            ],
+        },
+        recreate_output=True,
+    )
+    telemetry = _read_jsonl(run_dir / "telemetry.jsonl")
+    by_step = {row["step"]: row for row in telemetry if not row.get("post_ops")}
+    assert list(by_step) == [0, 1, 2, 3]
+    assert by_step[0]["ogs_failure_enabled"] is False
+    assert by_step[0]["wrs_failure_enabled"] is False
+    assert by_step[1]["ogs_failure_enabled"] is True
+    assert by_step[1]["wrs_failure_enabled"] is False
+    assert by_step[2]["ogs_failure_enabled"] is True
+    assert by_step[2]["wrs_failure_enabled"] is True
+    assert by_step[3]["ogs_failure_enabled"] is False
+    assert by_step[3]["wrs_failure_enabled"] is True
+
+
+def test_ssos_eclss_loop_clears_scheduled_failures_after_exception(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    backend = LoopMockEclssBackend(
+        {"simulation": {"initial_co2_storage_kg": 1.0}, "mock_dynamics": {}}
+    )
+
+    def raise_after_injection():
+        raise RuntimeError("simulated telemetry failure")
+
+    monkeypatch.setattr(backend, "poll_telemetry", raise_after_injection)
+    monkeypatch.setattr(
+        "scenario.ssos_eclss_loop.scenario_run.build_eclss_backend",
+        lambda config, kind=None: backend,
+    )
+
+    with pytest.raises(ValueError, match="simulated telemetry failure"):
+        run_scenario(
+            "ssos_eclss_loop",
+            output_dir=tmp_path / "failure_cleanup",
+            overrides={
+                "simulation": {"steps": 1},
+                "inject_failures": True,
+                "subsystem_failures": [{"subsystem": "ars", "start_step": 0}],
+            },
+            recreate_output=True,
+        )
+
+    # The backend outlives the failed run, as a persistent ROS2 backend can.
+    assert backend._failure_flags["ars"] is False
+
+
 def test_ssos_eclss_loop_plant_sim_writes_thresholds_and_metabolism(tmp_path: Path):
     run_dir = run_scenario(
         "ssos_eclss_loop",
@@ -420,7 +552,7 @@ def test_ssos_eclss_loop_plant_sim_writes_thresholds_and_metabolism(tmp_path: Pa
         and "last_metabolism" in (row["raw_topics"]["plant_sim"])
         and row.get("post_ops") is not True
     ]
-    assert len(metabolism_rows) == 2  # steps 2 and 3 (advance before poll)
+    assert len(metabolism_rows) == 2  # steps 1 and 2 (advance before poll)
 
     proposals_path = run_dir / "design_proposals.json"
     if proposals_path.exists():

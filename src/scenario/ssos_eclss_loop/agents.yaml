@@ -2,11 +2,11 @@
 
 mode: labeled_rule_base
 
-memory_limit: 8
+memory_limit: 1000
 discourse_window: 12
 
 team:
-  count: 3
+  count: 4
   id_prefix: eclss_operator
   persona: |
     SSOS ECLSS operator engineer. Read storage telemetry (/co2_storage, /o2_storage);
@@ -44,11 +44,11 @@ policy:
 llm:
   # Host mock: localhost. In SSOS Docker use host.docker.internal (ea-loop sets OLLAMA_BASE_URL).
   base_url: http://localhost:11434
-  model: gemma4:e4b
+  model: qwen3.5:9b
   temperature: 0.45
   max_tokens: 512
   repeat_penalty: 1.1
   repeat_last_n: 128
   min_p: 0.05
   think: false
-  api_timeout: 10
+  api_timeout: 20

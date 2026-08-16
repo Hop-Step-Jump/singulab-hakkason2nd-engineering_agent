@@ -133,6 +133,13 @@ thresholds:
   o2_storage_low_kg: 0.45
   product_water_low_l: 50.0
 
+# 既定はオフ。--inject-failures または inject_failures: true で有効化
+inject_failures: false
+subsystem_failures:
+  - subsystem: ars   # ars | ogs | wrs
+    start_step: 10   # 含む（0-based）
+    end_step: 20     # 任意・含まない
+
 agents:
   mode: none  # none | labeled_rule_base | llm
 
@@ -143,6 +150,22 @@ output:
 ```
 
 `ssos_graph.rewires`（任意）— 前 run の `graph_rewire` 提案を `--apply-proposals` でマージすると、次 run の `Ros2EclssBridge` に client remap が渡る。
+
+### サブシステム故障スケジュール（`subsystem_failures`）
+
+任意の step で ARS / OGS / WRS 故障を発生させる。**既定はオフ**（`inject_failures: false`）。`ea run ssos_eclss_loop --inject-failures` または `--set inject_failures=true` で有効化する。有効時、シナリオ層が毎 step `EclssBackend.set_subsystem_failure` を呼び、`mock` / `plant_sim` / `ros2` いずれでも同じ YAML で使える。
+
+| フィールド | 必須 | 意味 |
+| --- | --- | --- |
+| `subsystem` | yes | `ars` / `ogs` / `wrs`（`ARS_failure` 形式も可） |
+| `start_step` | yes | 故障開始 step（含む、0-based） |
+| `end_step` | no | 終了 step（**含まない**）。省略時は run 終了まで |
+| `duration_steps` | no | `end_step` の代わりに期間を指定（同時指定不可、>= 1） |
+
+- スケジュールに一度でも出てきた subsystem は、その run 中はスケジュールが所有する（非アクティブ時は flag をクリアし直す）。
+- 遷移時のみ `events.jsonl` に `subsystem_failure_applied` を記録する。
+- テレメトリの `ars_failure_enabled` 等でダッシュボードの anomaly 表示に載る。
+- scrubber の `anomalies:` / `inject_anomaly` とは別系統（効率劣化スケジュールではない）。
 
 ### agents.yaml（主要項目）
 
