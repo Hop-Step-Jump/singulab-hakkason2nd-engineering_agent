@@ -134,7 +134,7 @@ class ParsedTurn:
 
 MESSAGE_WORD_LIMIT = 60
 REASONING_WORD_LIMIT = 80
-MEMORY_WORD_LIMIT = 25
+MEMORY_WORD_LIMIT = 40
 
 
 def json_envelope_preamble() -> str:

@@ -1,5 +1,12 @@
 from core.agents.base import DeliberationContext, Persona
-from core.agents.persona import PersonaAgent, PersonaPromptBuilder, load_team, message_contract
+from core.agents.persona import (
+    MESSAGE_WORD_LIMIT,
+    REASONING_WORD_LIMIT,
+    PersonaAgent,
+    PersonaPromptBuilder,
+    load_team,
+    message_contract,
+)
 from core.agents.types import AgentMessage, DeliberationPhase
 from scenario.agents.scrubber_degradation_team import build_llm_situation
 from scenario.agents.types import AgentObservation
@@ -41,8 +48,8 @@ def test_persona_prompt_includes_memory_discourse_and_markers():
     assert "noted rising CO2" in prompt
     assert "## Your memory" in prompt
     assert "## Team discourse" in prompt
-    assert "at most 60 words" in prompt
-    assert "at most 80 words" in prompt
+    assert f"at most {MESSAGE_WORD_LIMIT} words" in prompt
+    assert f"at most {REASONING_WORD_LIMIT} words" in prompt
 
 
 def test_load_team_builds_engineer_ids():

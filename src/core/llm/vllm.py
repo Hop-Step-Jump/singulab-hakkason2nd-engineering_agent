@@ -28,8 +28,14 @@ DEFAULT_API_KEY = "dummy"
 VLLM_BASE_URL_ENV = "VLLM_BASE_URL"
 VLLM_API_KEY_ENV = "VLLM_API_KEY"
 VLLM_API_TIMEOUT_ENV = "VLLM_API_TIMEOUT"
+VLLM_MAX_MODEL_LEN_ENV = "VLLM_MAX_MODEL_LEN"
 API_TIMEOUT = 300
 CONNECTION_CHECK_TIMEOUT = 5
+# Must match vllm-server/scripts/serve_small.sh --max-model-len.
+DEFAULT_MAX_MODEL_LEN = 32768
+_CHAT_TEMPLATE_OVERHEAD_TOKENS = 256
+# Conservative chars/token so we stay under the server cap without a tokenizer.
+_CHARS_PER_TOKEN = 3
 
 # Lab server: 8B is 6-way replicated (theoretical ~384); 32B is capped at 32.
 _MODEL_CONCURRENCY_DEFAULTS = [
@@ -113,6 +119,47 @@ def vllm_auth_headers(llm_cfg: Optional[Dict[str, Any]] = None) -> Dict[str, str
     return {"Authorization": f"Bearer {resolve_vllm_api_key(llm_cfg)}"}
 
 
+def resolve_vllm_max_model_len() -> int:
+    env_raw = os.environ.get(VLLM_MAX_MODEL_LEN_ENV, "").strip()
+    if env_raw:
+        return int(env_raw)
+    return DEFAULT_MAX_MODEL_LEN
+
+
+def _clamp_completion_tokens(max_tokens: int) -> int:
+    """Leave at least one prompt token whenever the window is larger than overhead."""
+    requested = max(1, int(max_tokens))
+    room = resolve_vllm_max_model_len() - _CHAT_TEMPLATE_OVERHEAD_TOKENS
+    if room <= 1:
+        return max(1, room)
+    return min(requested, room - 1)
+
+
+def _fit_prompt_to_context(prompt: str, max_tokens: int) -> str:
+    """Keep instructions (head) and recent context (tail) under the server window."""
+    budget_tokens = max(
+        0,
+        resolve_vllm_max_model_len() - int(max_tokens) - _CHAT_TEMPLATE_OVERHEAD_TOKENS,
+    )
+    budget_chars = budget_tokens * _CHARS_PER_TOKEN
+    if len(prompt) <= budget_chars:
+        return prompt
+    marker = "\n\n[... truncated to fit context ...]\n\n"
+    if budget_chars <= len(marker):
+        return prompt[:budget_chars]
+    head = min(12_000, budget_chars // 4)
+    tail = budget_chars - head - len(marker)
+    if tail <= 0:
+        return prompt[:budget_chars]
+    logger.warning(
+        "VllmClient truncating prompt from %s to %s chars (max_model_len=%s)",
+        len(prompt),
+        head + len(marker) + tail,
+        resolve_vllm_max_model_len(),
+    )
+    return prompt[:head] + marker + prompt[-tail:]
+
+
 class VllmClient(LLMClient):
     def __init__(
         self,
@@ -153,15 +200,24 @@ class VllmClient(LLMClient):
         return session
 
     def generate(self, prompt: str) -> str:
+        max_tokens = _clamp_completion_tokens(self.max_tokens)
+        if max_tokens != self.max_tokens:
+            logger.warning(
+                "VllmClient clamping max_tokens from %s to %s (max_model_len=%s)",
+                self.max_tokens,
+                max_tokens,
+                resolve_vllm_max_model_len(),
+            )
+        prompt = _fit_prompt_to_context(prompt, max_tokens)
         try:
             payload: Dict[str, Any] = {
                 "model": self.model,
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": self.temperature,
-                "max_tokens": self.max_tokens,
+                "max_tokens": max_tokens,
                 "repetition_penalty": self.repeat_penalty,
-                "min_p": self.min_p,
             }
+            # vLLM MTP / speculative decoding rejects min_p and logit_bias.
             if self.think is not None:
                 payload["chat_template_kwargs"] = {"enable_thinking": bool(self.think)}
             response = self._session.post(
@@ -175,7 +231,17 @@ class VllmClient(LLMClient):
             content = message.get("content") or ""
             return str(content).strip()
         except Exception as e:
-            logger.error("VllmClient.generate error: %s", e)
+            detail = ""
+            resp = getattr(e, "response", None)
+            if resp is not None:
+                try:
+                    detail = (resp.text or "")[:500]
+                except Exception:
+                    detail = ""
+            if detail:
+                logger.error("VllmClient.generate error: %s | %s", e, detail)
+            else:
+                logger.error("VllmClient.generate error: %s", e)
             return ""
 
     def check_connection(self) -> bool:

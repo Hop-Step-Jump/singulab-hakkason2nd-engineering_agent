@@ -5,7 +5,8 @@ description: >
   Mass storage values are kilograms (ROS bridge converts SSOS grams ↔ kg).
 
 simulation:
-  steps: 40
+  steps: 50  # decision cycles (observe → deliberate → act)
+  # Baseline 4-crew inventories. CO2 start sits just below the high band.
   initial_co2_storage_kg: 1.3
   initial_o2_storage_kg: 0.48
   initial_product_water_l: 51.0
@@ -28,6 +29,7 @@ thresholds:
   co2_storage_high_kg: 1.5
   co2_storage_critical_kg: 2.2
   o2_storage_low_kg: 0.45
+  # 51 L tank vs 50 L low band (~1 L headroom). Two OGS reps draw 0.15 L each.
   product_water_low_l: 50.0
 
 # Optional timed fault injection (scenario layer → EclssBackend.set_subsystem_failure).
@@ -40,13 +42,16 @@ subsystem_failures:
     end_step: 20             # optional, exclusive
   - subsystem: ogs
     start_step: 20
-    duration_steps: 10       # alternative to end_step
-
+    end_step: 30       
+  - subsystem: wrs
+    start_step: 30
+    end_step: 40       
+    
 agents:
   mode: none  # none | labeled_rule_base | llm
-  # After llm deliberation, this many agents may issue operational commands (default 1).
+  # After llm deliberation, this many agents may issue operational commands.
   # Rotates from eclss_operator_{step % N}. Clamped to team.count. labeled_rule_base ignores this.
-  max_actions_per_step: 1
+  max_actions_per_step: 2
 
 output:
   run_id: ssos_eclss_loop_baseline

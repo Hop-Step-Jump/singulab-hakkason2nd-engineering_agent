@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from core.llm.vllm import (
     DEFAULT_BASE_URL,
+    DEFAULT_MAX_MODEL_LEN,
     VllmClient,
+    _CHAT_TEMPLATE_OVERHEAD_TOKENS,
+    _CHARS_PER_TOKEN,
+    _clamp_completion_tokens,
+    _fit_prompt_to_context,
     looks_like_ollama_url,
     normalize_vllm_base_url,
     resolve_vllm_base_url,
@@ -71,6 +76,7 @@ def test_vllm_generate_posts_chat_completions(monkeypatch):
     assert captured["json"]["model"] == "qwen3-8b"
     assert captured["json"]["messages"] == [{"role": "user", "content": "ping"}]
     assert captured["json"]["chat_template_kwargs"] == {"enable_thinking": False}
+    assert "min_p" not in captured["json"]
     assert captured["headers"]["Authorization"] == "Bearer dummy"
 
 
@@ -116,3 +122,68 @@ def test_vllm_sessions_are_thread_local():
         thread.join()
     assert len(ids) == 2
     assert ids[0] != ids[1]
+
+
+def test_fit_prompt_keeps_short_prompts():
+    assert _fit_prompt_to_context("ping", max_tokens=768) == "ping"
+
+
+def test_fit_prompt_keeps_head_and_tail(monkeypatch):
+    monkeypatch.setenv("VLLM_MAX_MODEL_LEN", "2048")
+    prompt = "HEAD" + ("x" * 20_000) + "TAIL"
+    fitted = _fit_prompt_to_context(prompt, max_tokens=128)
+    assert fitted.startswith("HEAD")
+    assert fitted.endswith("TAIL")
+    assert "truncated to fit context" in fitted
+    assert len(fitted) < len(prompt)
+    assert DEFAULT_MAX_MODEL_LEN == 32768
+
+
+def test_fit_prompt_allows_budget_below_old_char_floor(monkeypatch):
+    monkeypatch.setenv("VLLM_MAX_MODEL_LEN", "1024")
+    fitted = _fit_prompt_to_context("x" * 5000, max_tokens=768)
+    assert len(fitted) < 1024
+    assert len(fitted) <= max(
+        0, (1024 - 768 - _CHAT_TEMPLATE_OVERHEAD_TOKENS) * _CHARS_PER_TOKEN
+    )
+
+
+def test_fit_prompt_does_not_restore_full_string_when_tail_is_zero(monkeypatch):
+    monkeypatch.setenv("VLLM_MAX_MODEL_LEN", "400")
+    prompt = "HEAD" + ("x" * 20_000) + "TAIL"
+    fitted = _fit_prompt_to_context(prompt, max_tokens=128)
+    budget_chars = (400 - 128 - _CHAT_TEMPLATE_OVERHEAD_TOKENS) * _CHARS_PER_TOKEN
+    assert len(fitted) <= budget_chars
+    assert fitted != prompt
+    assert not fitted.endswith("TAIL")
+
+
+def test_clamp_completion_tokens_leaves_prompt_room(monkeypatch):
+    monkeypatch.setenv("VLLM_MAX_MODEL_LEN", "1024")
+    clamped = _clamp_completion_tokens(768)
+    assert clamped < 768
+    assert clamped + 1 + _CHAT_TEMPLATE_OVERHEAD_TOKENS <= 1024
+
+
+def test_vllm_generate_clamps_output_when_window_is_tight(monkeypatch):
+    captured = {}
+
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return {"choices": [{"message": {"content": "ok"}}]}
+
+    def fake_post(url, json, headers, timeout):
+        captured["json"] = json
+        return FakeResponse()
+
+    monkeypatch.setenv("VLLM_MAX_MODEL_LEN", "1024")
+    client = VllmClient(max_tokens=768)
+    monkeypatch.setattr(client._session, "post", fake_post)
+    assert client.generate("x" * 5000) == "ok"
+    max_tokens = captured["json"]["max_tokens"]
+    prompt = captured["json"]["messages"][0]["content"]
+    prompt_tokens = (len(prompt) + _CHARS_PER_TOKEN - 1) // _CHARS_PER_TOKEN
+    assert max_tokens + prompt_tokens + _CHAT_TEMPLATE_OVERHEAD_TOKENS <= 1024
