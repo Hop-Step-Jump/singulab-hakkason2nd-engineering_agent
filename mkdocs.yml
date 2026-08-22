@@ -87,6 +87,7 @@ plugins:
                 - ECLSS physical phenomena: memo/ssos_eclss_loop/ssos_eclss_physical_phenomena_overview.md
                 - EPS physical phenomena: memo/ssos_eclss_loop/ssos_eps_physical_phenomena_overview.md
                 - Plant Sim backend: memo/ssos_eclss_loop/plant_sim_backend.md
+                - Occupant survival: memo/ssos_eclss_loop/occupant_survival.md
                 - Persona LLM OOP plan: memo/agents/persona_llm_core_oop_plan.md
                 - Persona workshop draft: memo/agents/persona_workshop_draft.md
         - locale: ja
@@ -142,6 +143,7 @@ plugins:
                 - ECLSS 物理現象: memo/ssos_eclss_loop/ssos_eclss_physical_phenomena_overview.md
                 - EPS 物理現象: memo/ssos_eclss_loop/ssos_eps_physical_phenomena_overview.md
                 - Plant Sim backend 解説: memo/ssos_eclss_loop/plant_sim_backend.md
+                - 乗員サバイバル: memo/ssos_eclss_loop/occupant_survival.md
                 - CLI v3 プラン: memo/cli_v3_plan.md
                 - Persona LLM OOP: memo/agents/persona_llm_core_oop_plan.md
                 - Persona ワークショップ: memo/agents/persona_workshop_draft.md

@@ -388,7 +388,7 @@ backend 選択: `scenario.yaml` の `backend.kind`、環境変数 `SSOS_ECLSS_BA
 
 `plant_sim` では `raw_topics.plant_sim` に ledger フィールド（`captured_co2_kg`、vent 累積、shortfall、尿バッファ、`crew_alive` / `crew_lost_total` / `survival` 等）が入る。`co2_storage_kg` は **cabin** CO₂ であり、captured タンクではない。
 
-`plant_sim.survival.enabled` が true のとき、操作後に帯滞在（O2/水の WARNING 滞在コスト / CRITICAL 表。CO2 WARNING は 2 ステップ後に一度だけ `n // 4`、CO2 CRITICAL は 2 ステップ後に一度だけ `n // 2`）で減員し、そのあと物理下限（次ステップの O2・水が払える人数。cabin CO2 では物理減員しない。最終ステップは次の代謝がないので適用しない）をハードキャップとして適用する。O2 と水が同時に下限になるときは減員人数を O2 に帰属する。イベントの `limiting` は帯原因（`o2_warning` 等）と物理原因（`o2_physics` 等）を区別する。テレメトリの `raw_topics.plant_sim.survival.lost_this_step` はそのステップの帯滞在と物理下限の合計である。`/eclss/events/crew_lost` と `summary.json` の `crew_remaining` / `crew_lost` / `crew_lost_by_cause` に記録され、運用エージェントも同じ人数に同期する。
+`plant_sim.survival.enabled` が true のとき、操作後に帯滞在のあと物理下限を適用する。設計の詳細は [乗員サバイバル](memo/ssos_eclss_loop/occupant_survival.md)。`/eclss/events/crew_lost` と `summary.json` の `crew_remaining` / `crew_lost` / `crew_lost_by_cause` に記録され、運用エージェントも同じ人数に同期する。
 
 `"post_ops": true` 付きの 2 行目が追記されうる（1 step あたり最大 2 行）。`plant_sim` かつ survival 有効ではこの行が生存適用後のスナップショット（対応する `health_metrics` 行も含む。運用コマンドがなくても出す）。`mock` / `ros2`、または survival オフの `plant_sim` では運用コマンド後の L5 更新のみである。ダッシュボード等の読取側は `post_ops`／同 step の最終行を優先し、`summary.json` と揃える。
 

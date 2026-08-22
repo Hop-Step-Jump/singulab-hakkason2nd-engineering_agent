@@ -258,6 +258,7 @@ LLM モードは Ollama または研究室 vLLM が必要。CI・回帰は Fake 
 | [docs/one-piece-integration.md](one-piece-integration.md)               | One Piece 連携（現状 provenance のみ。要求 pull は将来） |
 | [docs/scenario-scrubber-degradation.md](scenario-scrubber-degradation.md) | 参照シナリオの仕様                                  |
 | [docs/scenario-ssos-eclss-loop.md](scenario-ssos-eclss-loop.md) | SSOS 実 ECLSS シナリオ（Phase 0–7） |
+| [乗員サバイバル](memo/ssos_eclss_loop/occupant_survival.md) | plant_sim の乗員・運用エージェント減員（帯滞在） |
 
 ---
 

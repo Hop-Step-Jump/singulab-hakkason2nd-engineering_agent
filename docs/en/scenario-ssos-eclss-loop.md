@@ -271,7 +271,7 @@ python -m scenario.ssos_eclss_loop.scenario_run --backend plant_sim --agents-mod
 python3 -m tools.cli run ssos_eclss_loop --backend plant_sim --agents-mode labeled_rule_base --steps 72
 ```
 
-Details: [Plant Sim backend](memo/ssos_eclss_loop/plant_sim_backend.md).
+Details: [Plant Sim backend](memo/ssos_eclss_loop/plant_sim_backend.md). Occupant attrition: [Occupant survival](memo/ssos_eclss_loop/occupant_survival.md).
 
 ### ros2 (SSOS Docker)
 

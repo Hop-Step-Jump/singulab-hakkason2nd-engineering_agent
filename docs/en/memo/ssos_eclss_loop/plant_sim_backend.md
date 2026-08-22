@@ -213,16 +213,9 @@ The plant is **not** a closed system (vents, brine, unrecoverable crew water). T
 
 ## Occupant survival
 
-`plant_sim.crew.size` in `scenario.yaml` is the canonical occupant count. When agents run, `team.count` must match. Occupants never return.
+Full design (band dwell + physics floor, YAML tables, try commands): [Occupant survival](occupant_survival.md).
 
-After each step's operations the scenario applies **band dwell**, then the **physics floor**:
-
-1. **Band dwell** (`scenario/ssos_eclss_loop/survival.py`) — same health bands as operations (`thresholds`). Staying in WARNING is a cost: O2/water lose 1 person after 2 consecutive steps; O2 CRITICAL loses 2 in one step, water CRITICAL loses 1. CO2 WARNING (HIGH, below CRITICAL) loses `n // 4` after 2 consecutive steps, **once per stay**. CO2 CRITICAL loses `n // 2` after 2 consecutive steps, once per stay (no wipe). A lone occupant (`n // 4` and `n // 2` are 0) is not lost to CO2 bands alone. CRITICAL does not increment the WARNING streak. Leave the band and re-enter to count again. Stacked requests are sliced in a fixed priority (CO2 critical, CO2 warning, O2 crit, water crit, O2 warning, water warning). Event `limiting` lists every requester; `crew_lost_by_cause` is that slice, not a duplicated total.
-2. **Physics floor** (`PlantModel.apply_capacity_drop`) — hard cap: keep only people the next metabolism interval can pay in O2 and water. Cabin CO2 does not cut crew here. Skip this look-ahead on the final step (no following `advance_step`). Event labels use `o2_physics` / `water_physics` / `co2_physics` so they are not confused with dwell causes. When both O2 and water bind, `limiting` lists both but the lost headcount is attributed to O2 (`crew_lost_o2`).
-
-The scenario never writes `model.state` directly; it calls `backend.set_crew_alive` then `backend.apply_capacity_drop`. Operators shrink with `crew_alive`. Telemetry `raw_topics.plant_sim.survival` accumulates dwell then physics for that step (`lost_this_step` / `limiting`). Those values land on the single `post_ops` telemetry + health row when survival is enabled (at most two rows per step). Survival off does not emit that extra row unless operational commands ran.
-
-Disable with `plant_sim.survival.enabled: false` (unit tests and the sensitivity sweep do this). O2/water CRITICAL thresholds live in YAML (`o2_storage_critical_kg`, `product_water_critical_l`); if omitted they fall back to `o2_storage_low_kg * 0.75` and `product_water_low_l * 0.5`.
+`plant_sim.crew.size` is the canonical occupant count; `team.count` must match. After ops: **band dwell** then **physics floor** (O2/water next interval; no cabin-CO2 wipe; skip floor on the last step). Operators shrink with `crew_alive`. Disable with `plant_sim.survival.enabled: false`.
 
 ## Interactive sensitivity (not the run dashboard)
 
@@ -249,6 +242,7 @@ Every plotted number is derived from YAML + `PlantModel`. Rate panels use the sa
 
 | Document / path | Content |
 | --- | --- |
+| [occupant_survival.md](occupant_survival.md) | Occupant / operator attrition (band dwell + physics floor) |
 | [scenario-ssos-eclss-loop.md](../../scenario-ssos-eclss-loop.md) | Scenario spec and run commands |
 | [ssos/eclss-integration.md](../../ssos/eclss-integration.md) | `EclssBackend` implementations |
 | [api-contracts.md](../../api-contracts.md) | JSONL schemas |

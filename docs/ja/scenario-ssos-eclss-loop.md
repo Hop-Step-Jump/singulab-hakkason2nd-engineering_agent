@@ -269,7 +269,7 @@ python -m scenario.ssos_eclss_loop.scenario_run --backend mock --agents-mode llm
 python -m scenario.ssos_eclss_loop.scenario_run --backend plant_sim --agents-mode labeled_rule_base --steps 72
 ```
 
-詳細: [Plant Sim backend 解説](memo/ssos_eclss_loop/plant_sim_backend.md)。
+詳細: [Plant Sim backend 解説](memo/ssos_eclss_loop/plant_sim_backend.md)。乗員減員: [乗員サバイバル](memo/ssos_eclss_loop/occupant_survival.md)。
 
 ### ros2（SSOS Docker）
 
