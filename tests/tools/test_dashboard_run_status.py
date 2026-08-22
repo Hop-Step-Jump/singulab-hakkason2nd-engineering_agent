@@ -168,10 +168,27 @@ def test_extract_operator_step_includes_thoughts_and_ops():
         summary={"agents_mode": "llm"},
     )
     assert payload["agents_mode"] == "llm"
+    assert payload["actor_mode"] is None
+    assert payload["design_mode"] is None
     assert len(payload["messages"]) == 2
     assert payload["messages"][0]["reasoning"] == "Telemetry o2_storage_kg=0.2"
     assert payload["operations"][0]["command_kind"] == "oxygen_generation"
     assert payload["operations"][0]["details"]["o2_produced_kg"] == 0.1
+
+
+def test_extract_operator_step_includes_actor_and_design_modes():
+    payload = extract_operator_step(
+        step=1,
+        messages=[],
+        events=[],
+        summary={
+            "agents_mode": "labeled_rule_base",
+            "actor_mode": "labeled_rule_base",
+            "design_mode": "llm",
+        },
+    )
+    assert payload["actor_mode"] == "labeled_rule_base"
+    assert payload["design_mode"] == "llm"
 
 
 def test_extract_design_drivers_uses_recorded_fields_only():

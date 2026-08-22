@@ -213,6 +213,8 @@ def eclss_design_proposal_contract() -> str:
         'Optional key: "memory". '
         f"{output_word_limits_clause()} "
         '"changes" is a list of {"change_kind","payload"} objects. '
+        "Emit as many valid changes as the run warrants; there is no count cap. "
+        "Empty changes is allowed when nothing should be proposed. "
         'change_kind in ["action_profile","service_config","set_parameter","graph_rewire"]. '
         'action_profile payload: {"subsystem":"ars|ogs|wrs","action":"...","fields":{...}}. '
         'service_config payload: {"service":"request_co2|request_o2", ...}. '
@@ -374,8 +376,9 @@ class PersonaAgent:
             )
         if phase == DeliberationPhase.POST_RUN:
             return (
-                "Post-run design review: simulation is complete. Propose structural changes as "
-                "recommendations only — cite team discourse and run outcomes."
+                "Post-run design review: simulation is complete. You are the sole representative. "
+                "Propose as many structural changes as needed — no count cap on the changes list. "
+                "Recommendations only — cite team discourse and run outcomes."
             )
         return PersonaAgent.action_round_hint()
 

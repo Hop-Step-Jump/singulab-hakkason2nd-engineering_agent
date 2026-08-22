@@ -34,7 +34,7 @@
 | `design_state.jsonl` | 各 step 開始時点の設計スナップショット |
 | `design_proposals.json` | ラン終了後の恒久提案（**change_kind が系統で異なる**） |
 | `scenario_config.yaml` | この run で実際に使われたシナリオ設定（CLI overrides / `--apply-proposals` 適用後） |
-| `agents_config.yaml` | この run で実際に使われたエージェント設定（`agents.mode` ≠ `none` のとき） |
+| `agents_config.yaml` | この run で実際に使われたエージェント設定（その側が `none` でないとき） |
 | `summary.json` | 実行サマリ |
 | `provenance.jsonl` | One Piece 互換来歴（[one-piece-integration.md](one-piece-integration.md)） |
 
@@ -44,10 +44,10 @@
 
 | フィールド | 説明 |
 | --- | --- |
-| `proposed_by` | 最終 step の action 代表 ID |
+| `proposed_by` | scrubber: 最終 step の action 代表 ID。ssos: designer 代表（`eclss_designer_*`） |
 | `decision_source` | `rule` または `llm` |
 | `message` / `reasoning` | 提案の説明 |
-| `changes` | 恒久変更のリスト（各要素に `change_kind` + `payload`） |
+| `changes` | 恒久変更のリスト（各要素に `change_kind` + `payload`）。代表 1 体が任意件数を出してよい |
 | `parse_notes` | LLM パース時の警告（任意） |
 
 `summary.json` の `design_proposals_path`、`design_proposal_count` と対応。
@@ -71,7 +71,7 @@
 | `comment` | ✓ deliberation | ✓ deliberation |
 | `skip` | ✓ パース失敗等 | ✓ パース失敗等 |
 
-代表 ID: scrubber は `engineer_*`、ssos は `eclss_operator_*`。Persona 全文や `policy` 値はログに含めない。
+代表 ID: scrubber は `engineer_*`。ssos 運用は `eclss_actor_*`、事後設計は `eclss_designer_*`。Persona 全文や `policy` 値はログに含めない。
 
 ### provenance.jsonl — 概要
 
@@ -388,7 +388,7 @@ backend 選択: `scenario.yaml` の `backend.kind`、環境変数 `SSOS_ECLSS_BA
 
 `plant_sim` では `raw_topics.plant_sim` に ledger フィールド（`captured_co2_kg`、vent 累積、shortfall、尿バッファ、`crew_alive` / `crew_lost_total` / `survival` 等）が入る。`co2_storage_kg` は **cabin** CO₂ であり、captured タンクではない。
 
-`plant_sim.survival.enabled` が true のとき、操作後に帯滞在のあと物理下限を適用する。設計の詳細は [乗員サバイバル](memo/ssos_eclss_loop/occupant_survival.md)。`/eclss/events/crew_lost` と `summary.json` の `crew_remaining` / `crew_lost` / `crew_lost_by_cause` に記録され、運用エージェントも同じ人数に同期する。
+`plant_sim.survival.enabled` が true のとき、操作後に帯滞在のあと物理下限を適用する。設計の詳細は [乗員サバイバル](memo/ssos_eclss_loop/occupant_survival.md)。`/eclss/events/crew_lost` と `summary.json` の `crew_remaining` / `crew_lost` / `crew_lost_by_cause` に記録され、**actor** も同じ人数に同期する。designer は減らない。
 
 `"post_ops": true` 付きの 2 行目が追記されうる（1 step あたり最大 2 行）。`plant_sim` かつ survival 有効ではこの行が生存適用後のスナップショット（対応する `health_metrics` 行も含む。運用コマンドがなくても出す）。`mock` / `ros2`、または survival オフの `plant_sim` では運用コマンド後の L5 更新のみである。ダッシュボード等の読取側は `post_ops`／同 step の最終行を優先し、`summary.json` と揃える。
 
@@ -400,7 +400,7 @@ backend 選択: `scenario.yaml` の `backend.kind`、環境変数 `SSOS_ECLSS_BA
 {
   "kind": "air_revitalisation",
   "payload": {"initial_co2_mass": 1.8, "initial_moisture_content": 25.0},
-  "issued_by": "eclss_operator_1"
+  "issued_by": "eclss_actor_1"
 }
 ```
 
@@ -445,7 +445,7 @@ backend 選択: `scenario.yaml` の `backend.kind`、環境変数 `SSOS_ECLSS_BA
 ```json
 {
   "design_domain": "ssos_graph",
-  "proposed_by": "eclss_operator_2",
+  "proposed_by": "eclss_designer_1",
   "decision_source": "rule",
   "changes": [
     {
@@ -462,18 +462,20 @@ backend 選択: `scenario.yaml` の `backend.kind`、環境変数 `SSOS_ECLSS_BA
 
 ### エージェントモード
 
-| `agents.mode` | チーム | ランタイム | 事後提案 |
-| --- | --- | --- | --- |
-| `none` | — | `poll_telemetry` のみ | — |
-| `labeled_rule_base` | `SsosEclssLoopTeam` | ストレージ閾値 → ARS/OGS | `ssos_graph`（rule） |
-| `llm` | 同上 | deliberation + operational | `ssos_graph`（llm） |
+ssos は actor（シミュレーション内）と design（事後）を分ける。`agents.design.mode` 省略時は `agents.actor.mode` を継承。設計: [事後設計エージェント](memo/ssos_eclss_loop/post_run_design_agent.md)。
+
+| モード | actor（`agents.actor.mode`） | designer（`agents.design.mode`） |
+| --- | --- | --- |
+| `none` | `poll_telemetry` のみ | `design_proposals.json` を書かない |
+| `labeled_rule_base` | `SsosEclssLoopTeam`: ストレージ閾値 → ARS/OGS | `PostRunDesignAgent`: ルール `ssos_graph` |
+| `llm` | 同じチーム: deliberation + operational | 同じエージェント: LLM `changes`（件数上限なし） |
 
 #### messages.jsonl 例
 
 ```json
 {
   "step": 2,
-  "from_role": "eclss_operator_1",
+  "from_role": "eclss_actor_1",
   "message": "Starting ARS air_revitalisation to vent CO2 from storage.",
   "message_type": "operational_command",
   "decision_source": "rule"
@@ -486,7 +488,7 @@ backend 選択: `scenario.yaml` の `backend.kind`、環境変数 `SSOS_ECLSS_BA
 {
   "step": 2,
   "kind": "/eclss/events/operational_applied",
-  "command": {"kind": "air_revitalisation", "issued_by": "eclss_operator_1", "payload": {"initial_co2_mass": 1.8}},
+  "command": {"kind": "air_revitalisation", "issued_by": "eclss_actor_1", "payload": {"initial_co2_mass": 1.8}},
   "result": {"success": true},
   "message": "ARS goal dispatched"
 }
@@ -513,6 +515,8 @@ backend 選択: `scenario.yaml` の `backend.kind`、環境変数 `SSOS_ECLSS_BA
 {
   "scenario": "ssos_eclss_loop",
   "backend": "ros2",
+  "actor_mode": "labeled_rule_base",
+  "design_mode": "labeled_rule_base",
   "agents_mode": "labeled_rule_base",
   "steps": 8,
   "peak_co2_storage_kg": 1.68,
@@ -521,7 +525,8 @@ backend 選択: `scenario.yaml` の `backend.kind`、環境変数 `SSOS_ECLSS_BA
   "operational_command_count": 3,
   "ogs_invoked_step": 2,
   "final_health": {"co2_status": "safe", "o2_status": "warning", "overall": "warning"},
-  "agent_ids": ["eclss_operator_1", "eclss_operator_2", "eclss_operator_3"],
+  "agent_ids": ["eclss_actor_1", "eclss_actor_2", "eclss_actor_3"],
+  "design_proposed_by": "eclss_designer_1",
   "provenance_record_count": 3
 }
 ```
@@ -550,7 +555,7 @@ backend 選択: `scenario.yaml` の `backend.kind`、環境変数 `SSOS_ECLSS_BA
   "record_type": "operational",
   "scenario": "ssos_eclss_loop",
   "change_kind": "air_revitalisation",
-  "actor": "eclss_operator_1",
+  "actor": "eclss_actor_1",
   "payload": {"initial_co2_mass": 1.8},
   "trace": {"event_kind": "/eclss/events/operational_applied", "result_success": true}
 }
@@ -560,10 +565,10 @@ backend 選択: `scenario.yaml` の `backend.kind`、環境変数 `SSOS_ECLSS_BA
 
 ```bash
 # mock（ホスト）
-python -m scenario.ssos_eclss_loop.scenario_run --backend mock --agents-mode labeled_rule_base
+python -m scenario.ssos_eclss_loop.scenario_run --backend mock --actor-mode labeled_rule_base
 
 # ros2（SSOS Docker）
-./scripts/run_ssos_eclss_loop.sh --agents-mode labeled_rule_base
+./scripts/run_ssos_eclss_loop.sh --actor-mode labeled_rule_base
 
 # graph_rewire E2E
 ./scripts/run_graph_rewire_e2e.sh
@@ -574,5 +579,6 @@ python -m scenario.ssos_eclss_loop.scenario_run --backend mock --agents-mode lab
 ## 関連ドキュメント
 
 - [architecture.md](architecture.md) — レイヤと実行フロー
+- [事後設計エージェント](memo/ssos_eclss_loop/post_run_design_agent.md) — actor / designer 分離
 - [one-piece-integration.md](one-piece-integration.md) — provenance 詳細
 - [development-plan.md](development-plan.md) — 未完了項目

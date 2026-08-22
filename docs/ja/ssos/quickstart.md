@@ -31,7 +31,7 @@ docker ps --filter name=ssos
 docker exec ssos test -f /root/ssos-eclss-headless.sh && echo "headless helper OK"
 
 # シミュレーション
-ea run ssos_eclss_loop --agents-mode labeled_rule_base --steps 50
+ea run ssos_eclss_loop --actor-mode labeled_rule_base --steps 50
 
 # 結果
 ea results
@@ -48,7 +48,7 @@ ea results
 ```bash
 cd /path/to/engineering_agents
 source .venv/bin/activate
-ea run ssos_eclss_loop --agents-mode labeled_rule_base --steps 50
+ea run ssos_eclss_loop --actor-mode labeled_rule_base --steps 50
 ea results
 ```
 
@@ -58,7 +58,7 @@ ea results
 docker start ssos
 cd /path/to/engineering_agents
 source .venv/bin/activate
-ea run ssos_eclss_loop --agents-mode labeled_rule_base --steps 50
+ea run ssos_eclss_loop --actor-mode labeled_rule_base --steps 50
 ea results
 ```
 
@@ -182,14 +182,14 @@ ros2 launch space_station space_station.launch.py
 cd /path/to/engineering_agents
 PYTHONPATH=src python3 -m scenario.ssos_eclss_loop.scenario_run --backend mock
 PYTHONPATH=src python3 -m scenario.ssos_eclss_loop.scenario_run \
-  --backend mock --agents-mode labeled_rule_base --steps 8
+  --backend mock --actor-mode labeled_rule_base --steps 8
 ```
 
 ### plant_sim（物質収支プラント）
 
 ```bash
 PYTHONPATH=src python3 -m scenario.ssos_eclss_loop.scenario_run \
-  --backend plant_sim --agents-mode labeled_rule_base --steps 72
+  --backend plant_sim --actor-mode labeled_rule_base --steps 72
 ```
 
 [Plant Sim backend 解説](../memo/ssos_eclss_loop/plant_sim_backend.md) を参照。

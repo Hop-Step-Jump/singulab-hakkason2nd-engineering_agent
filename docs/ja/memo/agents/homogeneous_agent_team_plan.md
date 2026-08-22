@@ -1,6 +1,8 @@
 # 同種エージェントチーム再設計プラン
 
 > 実装トラッキング用。Cursor plan と同期する。
+>
+> **ssos_eclss_loop の後続（実装済み）:** シミュレーション内 actor は事後設計を出さない。別チームの designer が担当する。[post_run_design_agent.md](../ssos_eclss_loop/post_run_design_agent.md)。このメモは共通の同種チームパターン（および単一チームのままの scrubber）を記述する。
 
 ## ステータス
 

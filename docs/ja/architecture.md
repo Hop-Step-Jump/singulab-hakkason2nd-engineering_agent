@@ -21,8 +21,8 @@
 | ------ | -------------------------------------------------------------------- | ---------------------------------------------------------- |
 | 叙事     | [scenario-scrubber-degradation.md](scenario-scrubber-degradation.md) | [scenario-ssos-eclss-loop.md](scenario-ssos-eclss-loop.md) |
 | バックエンド | `SimulatorProtocol` / `StationSimulator`                             | `EclssBackend` / `Ros2EclssBridge`                         |
-| チーム    | `ScrubberDegradationTeam`                                            | `SsosEclssLoopTeam`                                        |
-| 代表 ID  | `engineer_`*                                                         | `eclss_operator_*`                                         |
+| チーム    | `ScrubberDegradationTeam`                                            | `SsosEclssLoopTeam`（運用）+ `PostRunDesignAgent`           |
+| 代表 ID  | `engineer_`*                                                         | `eclss_actor_*`（運用）；`eclss_designer_*`（事後）           |
 | ランタイム  | 回復コマンド                                                               | 運用コマンド（ARS/OGS 等）                                          |
 | 事後提案   | scrubber トポロジ                                                        | `ssos_graph`                                               |
 | 実行環境   | ホスト Python のみ                                                        | mock または SSOS Docker                                       |
@@ -131,11 +131,11 @@ src/integrations/   （scenario から呼び出し）
 
 | 概念           | 説明                                       |
 | ------------ | ---------------------------------------- |
-| `team.count` | オペレータ数（scrubber デフォルト 4、ssos デフォルト 3）    |
+| `team.count` | オペレータ数（scrubber デフォルト 4）。ssos actor: `actor.team.count`（既定 50、`plant_sim.crew.size` とロックステップ）。designer: `design.team.count`（既定 4。乗員ではない） |
 | `team.archetypes` | 任意。思考レンズ名のリスト（scrubber デフォルト 4 種）。`agent_id` へ round-robin 割当。省略または `[]` で従来の同種チーム |
 | deliberation | llm: 全員 1 ラウンドを同時（並列）実行。labeled: ルールが定型メッセージ      |
-| action rep   | step ごとに `(step-1) % N` で代表がコマンド発行       |
-| post-run rep | 最終 step の代表が `design_proposals.json` を出力 |
+| action rep   | step ごとに `(step-1) % N` で代表がコマンド発行（ssos actor は 0-based の `step % N`） |
+| post-run     | ssos: ループ後の `PostRunDesignAgent`（`eclss_designer_*`。代表 1 体。`changes` 件数上限なし）。scrubber: 最終 step の代表 |
 | 設計分離         | **ランタイム中は恒久グラフを変えない**。事後提案のみ             |
 
 #### 思考スタイル archetype（`team.archetypes`）
@@ -159,6 +159,8 @@ src/integrations/   （scenario から呼び出し）
 詳細: [memo/agents/homogeneous_agent_team_plan.md](memo/agents/homogeneous_agent_team_plan.md)。実装: `src/core/agents/persona.py`。
 
 ### `agents.mode`（両系統共通の値）
+
+3 つの mode 文字列は共通。scrubber はフラットな `agents.mode`。`ssos_eclss_loop` は `agents.actor.mode` と `agents.design.mode`（省略時は actor を継承）。[事後設計エージェント](memo/ssos_eclss_loop/post_run_design_agent.md)。
 
 
 | モード                 | 意味                                |
@@ -448,7 +450,7 @@ scenario.yaml + agents.yaml (+ ssos_graph.rewires 任意)
   scenario/ssos_eclss_loop/scenario_run.py → SsosEclssLoopScenario
         │
         ├─ build_eclss_backend() → LoopMockEclssBackend | Ros2EclssBridge(topic_remap)
-        ├─ build_team()            → SsosEclssLoopTeam
+        ├─ build_team()            → SsosEclssLoopTeam（actor）
         │
         ▼
   for step in 1..N:
@@ -459,7 +461,7 @@ scenario.yaml + agents.yaml (+ ssos_graph.rewires 任意)
     5. log messages, operational events
         │
         ▼
-  propose_post_run_design() → design_proposals.json（ssos_graph）
+  PostRunDesignAgent.propose() → design_proposals.json（ssos_graph）
   export_run_provenance()   → operational レコード
 ```
 
@@ -477,7 +479,8 @@ scenario.yaml + agents.yaml (+ ssos_graph.rewires 任意)
 | `environment/ssos/ros2/cli.py` | 共有 `run_ros2_cli`、並列 topic echo、パースヘルパ |
 | `environment/ssos/eps/ros2/` | `Ros2EpsBridge` — **EPS のみ**。scrubber が使用、eclss loop 未接続 |
 | `scenario/ssos_eclss_loop/scenario_run.py` | `SsosEclssLoopScenario`、`build_eclss_backend()` |
-| `scenario/agents/ssos_eclss_loop_team.py` | `SsosEclssLoopTeam` |
+| `scenario/agents/ssos_eclss_loop_team.py` | `SsosEclssLoopTeam`（actor） |
+| `scenario/agents/ssos_post_run_design.py` | `PostRunDesignAgent`（事後 designer） |
 
 バックエンド選択（`scenario_run.py` の `build_eclss_backend`）:
 
@@ -616,11 +619,11 @@ SsosEclssLoopTeam                         # scenario/agents/ssos_eclss_loop_team
 ### エージェント
 
 
-| `agents.mode`       | ランタイム                      | 事後           | テスト                                |
-| ------------------- | -------------------------- | ------------ | ---------------------------------- |
-| `none`              | poll のみ                    | —            | `test_ssos_eclss_loop_scenario.py` |
-| `labeled_rule_base` | 閾値 → ARS/OGS               | `ssos_graph` | `test_ssos_eclss_loop_team.py`     |
-| `llm`               | N 体 deliberation の後、最大 `max_actions_per_step` 体が action | LLM changes  | 同上                                 |
+| モード | actor（`agents.actor.mode`） | designer（`agents.design.mode`） | テスト |
+| --- | --- | --- | --- |
+| `none` | poll のみ | `design_proposals.json` を書かない | `test_ssos_eclss_loop.py` |
+| `labeled_rule_base` | 閾値 → ARS/OGS | ルール `ssos_graph` | `test_ssos_eclss_loop.py`、`test_ssos_agent_config.py` |
+| `llm` | N 体 deliberation の後、最大 `max_actions_per_step` 体が action | LLM `changes`（件数上限なし） | 同上 |
 
 
 #### labeled_rule_base
@@ -638,7 +641,9 @@ SsosEclssLoopTeam                         # scenario/agents/ssos_eclss_loop_team
 
 #### llm
 
-N 体同時 deliberation のあと、`agents.max_actions_per_step` 体までの回転代表（既定 1）が運用コマンドを並列発行。プロンプトにはストレージ kg とヘルス状態（policy なし）。`--set agents.max_actions_per_step=8` で上書き可。
+N 体同時 deliberation のあと、`agents.actor.max_actions_per_step` 体までの回転代表（既定 **2**）が運用コマンドを並列発行。プロンプトにはストレージ kg とヘルス状態（policy なし）。`--set agents.actor.max_actions_per_step=8` で上書き可。
+
+事後は designer 代表 1 体が `changes` を出す。件数に上限はない。
 
 ### 出力・ダッシュボード
 
@@ -662,7 +667,7 @@ N 体同時 deliberation のあと、`agents.max_actions_per_step` 体までの�
 
 run ID: `ssos_eclss_loop_{baseline|labeled_rule_base|llm}`
 
-接合詳細: [memo/ssos_eclss_loop/ssos_eclss_loop_connection_plan.md](memo/ssos_eclss_loop/ssos_eclss_loop_connection_plan.md)
+接合詳細: [memo/ssos_eclss_loop/ssos_eclss_loop_connection_plan.md](memo/ssos_eclss_loop/ssos_eclss_loop_connection_plan.md) · actor / designer 分離: [事後設計エージェント](memo/ssos_eclss_loop/post_run_design_agent.md)
 
 ---
 

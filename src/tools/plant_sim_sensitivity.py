@@ -99,6 +99,9 @@ def load_ssos_yaml() -> tuple[Dict[str, Any], Dict[str, Any]]:
 
 
 def _policy_goals(agents: Mapping[str, Any]) -> Dict[str, Any]:
+    nested = (agents.get("actor") or {}).get("policy") if isinstance(agents.get("actor"), Mapping) else None
+    if isinstance(nested, Mapping) and nested:
+        return dict(nested)
     return dict((agents.get("policy") or {}))
 
 

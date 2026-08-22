@@ -2,6 +2,8 @@
 # Homogeneous Agent Team Redesign Plan
 
 > For implementation tracking. Kept in sync with the Cursor plan.
+>
+> **ssos_eclss_loop follow-up (shipped):** in-sim actors no longer emit post-run design. That work moved to a separate designer team. See [post_run_design_agent.md](../ssos_eclss_loop/post_run_design_agent.md). This memo still describes the shared homogeneous-team pattern (and scrubber, which keeps a single team).
 
 ## Status
 

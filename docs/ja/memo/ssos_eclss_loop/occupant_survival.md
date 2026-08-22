@@ -4,7 +4,7 @@
 
 サバイバルは **`plant_sim` バックエンドだけ**。`mock` / `ros2` では帯滞在も物理下限も適用しない。チートシート / 感度アプリは `plant_sim.survival.enabled: false` のまま。
 
-人数の正本は `src/scenario/ssos_eclss_loop/scenario.yaml` の `plant_sim.crew.size`。エージェントありのときは `agents.yaml` の `team.count` と一致させる。減った乗員は戻らない。
+人数の正本は `src/scenario/ssos_eclss_loop/scenario.yaml` の `plant_sim.crew.size`。actor ありのときは `agents.yaml` の `actor.team.count` と一致させる。減った乗員は戻らない。**designer は `crew_alive` と一緒に減らない**（全滅後も提案する）。[事後設計エージェント](post_run_design_agent.md)。
 
 ## 最初の floor だけでは足りなかった理由
 
@@ -94,11 +94,11 @@ YAML は `plant_sim.survival`。CRITICAL 中は同じ資源の WARNING 連続カ
 
 ```bash
 python3 -m tools.cli run ssos_eclss_loop \
-  --backend plant_sim --agents-mode labeled_rule_base --steps 50 \
+  --backend plant_sim --actor-mode labeled_rule_base --steps 50 \
   --run-id survival-try
 ```
 
-`--agents-mode none` だと帯に居座りやすく、dwell が見やすい。OGS/ARS/WRS は WARNING から出せる。
+`--actor-mode none` だと帯に居座りやすく、dwell が見やすい。OGS/ARS/WRS は WARNING から出せる。
 
 ## コード
 
@@ -111,4 +111,4 @@ python3 -m tools.cli run ssos_eclss_loop \
 | `src/scenario/ssos_eclss_loop/health.py` | 閾値から WARNING/CRITICAL |
 | `tests/scenario/test_ssos_eclss_loop_survival.py` | dwell の表テスト |
 
-プラントの質量収支（サバイバル以外）は [plant_sim_backend.md](plant_sim_backend.md)。
+プラントの質量収支（サバイバル以外）は [plant_sim_backend.md](plant_sim_backend.md)。designer は別チーム: [事後設計エージェント](post_run_design_agent.md)。

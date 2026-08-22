@@ -28,4 +28,5 @@ When updating SSOS or scrubber backend docs, verify file paths against `src/envi
 
 - [Document catalog](catalog.md) — full page index including memos not in the main nav
 - [SSOS connection plan](memo/ssos_eclss_loop/ssos_eclss_loop_connection_plan.md)
+- [Post-run design agent](memo/ssos_eclss_loop/post_run_design_agent.md)
 - [SSOS roadmap](ssos/roadmap.md)

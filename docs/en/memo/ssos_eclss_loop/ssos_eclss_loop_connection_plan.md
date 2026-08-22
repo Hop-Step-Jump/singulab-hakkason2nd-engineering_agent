@@ -2,7 +2,8 @@
 # SSOS ECLSS Loop Integration Plan
 
 > **Scope**: `engineering_agents` agents operate Space Station OS ECLSS (ARS / OGS / WRS) instead of Crew Simulation. `scrubber_degradation` remains a separate scenario with Mock frozen.  
-> **Follow-up (Phase 8 onward)**: [backlog.md](../backlog.md) (BL-003–BL-005)
+> **Follow-up (Phase 8 onward)**: [backlog.md](../backlog.md) (BL-003–BL-005)  
+> **Later (shipped):** in-sim actors vs post-run designers — [post_run_design_agent.md](post_run_design_agent.md). `--agents-mode` on ssos is a deprecated alias for `--actor-mode`.
 
 ---
 

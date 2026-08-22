@@ -45,7 +45,7 @@ src/integrations/one_piece/
 
 ### ssos_eclss_loop
 
-`SsosEclssLoopScenario.run()` も同様。`agents.mode` が `labeled_rule_base` または `llm` のとき provenance をエクスポート。運用イベント（`/eclss/events/operational_applied`）が `record_type: operational` になる。
+`SsosEclssLoopScenario.run()` も同様。`agents.actor.mode` が `labeled_rule_base` または `llm` のとき運用 provenance をエクスポート。運用イベント（`/eclss/events/operational_applied`）が `record_type: operational` になる。事後の `design_proposals.json` は `PostRunDesignAgent` が書く（`team.propose_post_run_design` ではない）。
 
 ```text
 events.jsonl ──┐

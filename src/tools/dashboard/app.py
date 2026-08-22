@@ -1509,7 +1509,13 @@ def _render_health_card(
 
 
 def _summary_agents_mode(summary: Dict[str, Any]) -> str:
-    return str(summary.get("agents_mode", "—"))
+    actor = summary.get("actor_mode") or summary.get("agents_mode")
+    design = summary.get("design_mode")
+    if actor and design and str(design) != str(actor):
+        return f"actor={actor} design={design}"
+    if actor:
+        return str(actor)
+    return "—"
 
 
 def _render_run_identity_cards(

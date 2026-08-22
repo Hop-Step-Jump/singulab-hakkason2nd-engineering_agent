@@ -19,6 +19,20 @@ def merge_labeled_policy_from_thresholds(
     thresholds: Dict[str, Any],
 ) -> Dict[str, Any]:
     """Derive labeled_rule_base policy band keys from scenario verification thresholds."""
+    actor = agents_config.get("actor")
+    design = agents_config.get("design")
+    if isinstance(actor, dict) or isinstance(design, dict):
+        actor_mode = (actor or {}).get("mode")
+        design_mode = (design or {}).get("mode")
+        if actor_mode != "labeled_rule_base" and design_mode != "labeled_rule_base":
+            return agents_config
+        merged = copy.deepcopy(agents_config)
+        policy = merged.setdefault("actor", {}).setdefault("policy", {})
+        for key in THRESHOLD_POLICY_KEYS:
+            if key in thresholds:
+                policy[key] = thresholds[key]
+        return merged
+
     if agents_config.get("mode") != "labeled_rule_base":
         return agents_config
 

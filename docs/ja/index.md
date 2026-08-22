@@ -64,7 +64,7 @@
     `scripts/*.sh` は **Git Bash** から実行。例:
 
     ```powershell
-    & "C:\Program Files\Git\bin\bash.exe" -lc "ea run ssos_eclss_loop --backend mock --agents-mode labeled_rule_base --steps 8"
+    & "C:\Program Files\Git\bin\bash.exe" -lc "ea run ssos_eclss_loop --backend mock --actor-mode labeled_rule_base --steps 8"
     ```
 
     !!! tip "Windows で詰まりやすい点"
@@ -107,7 +107,7 @@ python3 -m tools.cli run scrubber_degradation --agents-mode labeled_rule_base --
 ### Mock SSOS シナリオ（Docker 不要）
 
 ```bash
-ea run ssos_eclss_loop --backend mock --agents-mode labeled_rule_base --steps 8
+ea run ssos_eclss_loop --backend mock --actor-mode labeled_rule_base --steps 8
 ea results
 ```
 
@@ -117,7 +117,7 @@ macOS 初回セットアップ — **ホスト** のみで実行:
 
 ```bash
 ./scripts/ssos/mac/ssos-run-detached.sh
-ea run ssos_eclss_loop --agents-mode labeled_rule_base --steps 50
+ea run ssos_eclss_loop --actor-mode labeled_rule_base --steps 50
 ea results
 ```
 
@@ -130,7 +130,7 @@ ea results
 | シナリオ | 内容 | バックエンド | 典型コマンド |
 | --- | --- | --- | --- |
 | [scrubber_degradation](scenario-scrubber-degradation.md) | Python モック上の CO₂ スクラバー異常 | `StationSimulator` | `ea run scrubber_degradation --agents-mode labeled_rule_base` |
-| [ssos_eclss_loop](scenario-ssos-eclss-loop.md) | SSOS ECLSS（ARS/OGS/WRS）のエージェント運用 | `mock` / `ros2` | `ea run ssos_eclss_loop --backend mock --agents-mode labeled_rule_base` |
+| [ssos_eclss_loop](scenario-ssos-eclss-loop.md) | SSOS ECLSS（ARS/OGS/WRS）のエージェント運用 | `mock` / `ros2` | `ea run ssos_eclss_loop --backend mock --actor-mode labeled_rule_base` |
 
 両シナリオでエージェントモードは共通: **`none`** / **`labeled_rule_base`**（再現性の高い回帰）/ **`llm`**（Ollama または研究室 vLLM）。
 

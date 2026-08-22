@@ -35,7 +35,7 @@ Files present in both tracks:
 | `design_state.jsonl` | Design snapshot at step start |
 | `design_proposals.json` | Post-run permanent proposals (**`change_kind` differs**) |
 | `scenario_config.yaml` | Effective scenario config used for the run (after CLI overrides and `--apply-proposals`) |
-| `agents_config.yaml` | Effective agents config used for the run (when `agents.mode` ≠ `none`) |
+| `agents_config.yaml` | Effective agents config used for the run (when that side is not `none`) |
 | `summary.json` | Run summary |
 | `provenance.jsonl` | One Piece compatible lineage ([one-piece-integration.md](one-piece-integration.md)) |
 
@@ -45,10 +45,10 @@ Both tracks write one file after the run. The simulator / SSOS graph is **not ch
 
 | Field | Description |
 | --- | --- |
-| `proposed_by` | Action representative ID at final step |
+| `proposed_by` | scrubber: action representative at the final step. ssos: designer representative (`eclss_designer_*`) |
 | `decision_source` | `rule` or `llm` |
 | `message` / `reasoning` | Proposal explanation |
-| `changes` | List of permanent changes (`change_kind` + `payload` each) |
+| `changes` | List of permanent changes (`change_kind` + `payload` each). One representative may emit any count |
 | `parse_notes` | LLM parse warnings (optional) |
 
 Corresponds to `design_proposals_path` and `design_proposal_count` in `summary.json`.
@@ -72,7 +72,7 @@ Corresponds to `design_proposals_path` and `design_proposal_count` in `summary.j
 | `comment` | ✓ deliberation | ✓ deliberation |
 | `skip` | ✓ parse failure, etc. | ✓ parse failure, etc. |
 
-Representative IDs: scrubber uses `engineer_*`, ssos uses `eclss_operator_*`. Full Persona text and `policy` values are not logged.
+Representative IDs: scrubber uses `engineer_*`. ssos ops uses `eclss_actor_*`; post-run design uses `eclss_designer_*`. Full Persona text and `policy` values are not logged.
 
 ### provenance.jsonl — overview
 
@@ -391,7 +391,7 @@ Implementation: `environment/ssos/eclss/backend.py`, `eclss/ros2/bridge.py`, `ec
 
 With `plant_sim`, extra ledger fields appear under `raw_topics.plant_sim` (`captured_co2_kg`, vent totals, shortfalls, urine buffer, `crew_alive` / `crew_lost_total` / `survival`). `co2_storage_kg` maps to **cabin** CO₂, not the captured tank.
 
-Occupant survival (when `plant_sim.survival.enabled` is true) records `/eclss/events/crew_lost` and summary fields `crew_initial`, `crew_remaining`, `crew_lost`, `crew_lost_by_cause`. Design: [occupant survival](memo/ssos_eclss_loop/occupant_survival.md). Band dwell runs first; the physics floor is a hard cap afterward (skipped on the final step). Operators shrink with `crew_alive`.
+Occupant survival (when `plant_sim.survival.enabled` is true) records `/eclss/events/crew_lost` and summary fields `crew_initial`, `crew_remaining`, `crew_lost`, `crew_lost_by_cause`. Design: [occupant survival](memo/ssos_eclss_loop/occupant_survival.md). Band dwell runs first; the physics floor is a hard cap afterward (skipped on the final step). **Actors** shrink with `crew_alive`. Designers do not.
 
 A second JSONL row may be appended with `"post_ops": true` (at most two rows per step). On `plant_sim` with survival enabled this row is the post-survival snapshot (and the matching `health_metrics` row), including steps with no operational commands. On `mock` / `ros2`, or `plant_sim` with survival off, it is the L5 refresh after operational commands only. Readers (dashboard) prefer `post_ops` / the last row for that step so UI matches `summary.json`.
 
@@ -403,7 +403,7 @@ A second JSONL row may be appended with `"post_ops": true` (at most two rows per
 {
   "kind": "air_revitalisation",
   "payload": {"initial_co2_mass": 1.8, "initial_moisture_content": 25.0},
-  "issued_by": "eclss_operator_1"
+  "issued_by": "eclss_actor_1"
 }
 ```
 
@@ -448,7 +448,7 @@ Same optional `"post_ops": true` duplicate-row rule as `telemetry.jsonl` (ops re
 ```json
 {
   "design_domain": "ssos_graph",
-  "proposed_by": "eclss_operator_2",
+  "proposed_by": "eclss_designer_1",
   "decision_source": "rule",
   "changes": [
     {
@@ -465,18 +465,20 @@ Same optional `"post_ops": true` duplicate-row rule as `telemetry.jsonl` (ops re
 
 ### Agent modes
 
-| `agents.mode` | Team | Runtime | Post-run |
-| --- | --- | --- | --- |
-| `none` | — | `poll_telemetry` only | — |
-| `labeled_rule_base` | `SsosEclssLoopTeam` | storage thresholds → ARS/OGS | `ssos_graph` (rule) |
-| `llm` | same | deliberation + operational | `ssos_graph` (llm) |
+ssos splits actor (in-sim) and design (post-run). Omitted `agents.design.mode` inherits `agents.actor.mode`. Design: [post-run design agent](memo/ssos_eclss_loop/post_run_design_agent.md).
+
+| Mode | Actors (`agents.actor.mode`) | Designers (`agents.design.mode`) |
+| --- | --- | --- |
+| `none` | `poll_telemetry` only | skip `design_proposals.json` |
+| `labeled_rule_base` | `SsosEclssLoopTeam`: storage thresholds → ARS/OGS | `PostRunDesignAgent`: rule `ssos_graph` |
+| `llm` | same team: deliberation + operational | same agent: LLM `changes` (no count cap) |
 
 #### messages.jsonl example
 
 ```json
 {
   "step": 2,
-  "from_role": "eclss_operator_1",
+  "from_role": "eclss_actor_1",
   "message": "Starting ARS air_revitalisation to vent CO2 from storage.",
   "message_type": "operational_command",
   "decision_source": "rule"
@@ -489,7 +491,7 @@ Same optional `"post_ops": true` duplicate-row rule as `telemetry.jsonl` (ops re
 {
   "step": 2,
   "kind": "/eclss/events/operational_applied",
-  "command": {"kind": "air_revitalisation", "issued_by": "eclss_operator_1", "payload": {"initial_co2_mass": 1.8}},
+  "command": {"kind": "air_revitalisation", "issued_by": "eclss_actor_1", "payload": {"initial_co2_mass": 1.8}},
   "result": {"success": true},
   "message": "ARS goal dispatched"
 }
@@ -516,6 +518,8 @@ Every step, **before** agent action. Snapshot of `ssos_graph` (includes `rewires
 {
   "scenario": "ssos_eclss_loop",
   "backend": "ros2",
+  "actor_mode": "labeled_rule_base",
+  "design_mode": "labeled_rule_base",
   "agents_mode": "labeled_rule_base",
   "steps": 8,
   "peak_co2_storage_kg": 1.68,
@@ -524,7 +528,8 @@ Every step, **before** agent action. Snapshot of `ssos_graph` (includes `rewires
   "operational_command_count": 3,
   "ogs_invoked_step": 2,
   "final_health": {"co2_status": "safe", "o2_status": "warning", "overall": "warning"},
-  "agent_ids": ["eclss_operator_1", "eclss_operator_2", "eclss_operator_3"],
+  "agent_ids": ["eclss_actor_1", "eclss_actor_2", "eclss_actor_3"],
+  "design_proposed_by": "eclss_designer_1",
   "provenance_record_count": 3
 }
 ```
@@ -553,7 +558,7 @@ Every step, **before** agent action. Snapshot of `ssos_graph` (includes `rewires
   "record_type": "operational",
   "scenario": "ssos_eclss_loop",
   "change_kind": "air_revitalisation",
-  "actor": "eclss_operator_1",
+  "actor": "eclss_actor_1",
   "payload": {"initial_co2_mass": 1.8},
   "trace": {"event_kind": "/eclss/events/operational_applied", "result_success": true}
 }
@@ -563,10 +568,10 @@ Every step, **before** agent action. Snapshot of `ssos_graph` (includes `rewires
 
 ```bash
 # mock (host)
-python -m scenario.ssos_eclss_loop.scenario_run --backend mock --agents-mode labeled_rule_base
+python -m scenario.ssos_eclss_loop.scenario_run --backend mock --actor-mode labeled_rule_base
 
 # ros2 (SSOS Docker)
-./scripts/run_ssos_eclss_loop.sh --agents-mode labeled_rule_base
+./scripts/run_ssos_eclss_loop.sh --actor-mode labeled_rule_base
 
 # graph_rewire E2E
 ./scripts/run_graph_rewire_e2e.sh
@@ -577,5 +582,6 @@ python -m scenario.ssos_eclss_loop.scenario_run --backend mock --agents-mode lab
 ## Related documentation
 
 - [architecture.md](architecture.md) — layers and execution flow
+- [post-run design agent](memo/ssos_eclss_loop/post_run_design_agent.md) — actor / designer split
 - [one-piece-integration.md](one-piece-integration.md) — provenance details
 - [development-plan.md](development-plan.md) — incomplete items

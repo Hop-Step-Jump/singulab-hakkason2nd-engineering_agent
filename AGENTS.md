@@ -46,11 +46,11 @@ Run N+1 → --apply-proposals → config merged → re-simulate → telemetry vs
 **Canonical 2-run smoke** (no Ollama, no ROS2): `ssos_eclss_loop` with `--backend mock` and `labeled_rule_base`. Use **distinct `--run-id` values** — the default `ssos_eclss_loop_labeled_rule_base` is recreated on each run (`EventLog.prepare_run_dir` removes the existing directory), which would delete Run 1 outputs before you can compare them.
 
 ```bash
-python3 -m tools.cli run ssos_eclss_loop --backend mock --agents-mode labeled_rule_base --steps 20 \
-  --run-id cloud-smoke-run1
-python3 -m tools.cli run ssos_eclss_loop --backend mock --agents-mode labeled_rule_base --steps 5 \
-  --run-id cloud-smoke-run2 \
-  --apply-proposals src/experiments/results/cloud-smoke-run1/design_proposals.json
+python3 -m tools.cli run ssos_eclss_loop --backend mock --actor-mode labeled_rule_base --steps 20 \
+ --run-id cloud-smoke-run1
+python3 -m tools.cli run ssos_eclss_loop --backend mock --actor-mode labeled_rule_base --steps 5 \
+ --run-id cloud-smoke-run2 \
+ --apply-proposals src/experiments/results/cloud-smoke-run1/design_proposals.json
 ```
 
 Confirm Run 1 wrote `src/experiments/results/cloud-smoke-run1/design_proposals.json` (`design_domain: ssos_graph`, non-empty `changes`). Confirm Run 2 completed with proposals merged. Compare `cloud-smoke-run2/summary.json` and `telemetry.jsonl` against Run 1 — behavior should reflect applied config while Run 1 artifacts remain intact.

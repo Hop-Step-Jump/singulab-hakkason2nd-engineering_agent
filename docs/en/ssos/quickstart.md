@@ -31,7 +31,7 @@ docker ps --filter name=ssos
 docker exec ssos test -f /root/ssos-eclss-headless.sh && echo "headless helper OK"
 
 # Simulation
-ea run ssos_eclss_loop --agents-mode labeled_rule_base --steps 50
+ea run ssos_eclss_loop --actor-mode labeled_rule_base --steps 50
 
 # Results
 ea results
@@ -48,7 +48,7 @@ Details: [CLI guide — SSOS Docker](../cli.md#ssos-docker-ssos_eclss_loop--ros2
 ```bash
 cd /path/to/engineering_agents
 source .venv/bin/activate
-ea run ssos_eclss_loop --agents-mode labeled_rule_base --steps 50
+ea run ssos_eclss_loop --actor-mode labeled_rule_base --steps 50
 ea results
 ```
 
@@ -58,7 +58,7 @@ ea results
 docker start ssos
 cd /path/to/engineering_agents
 source .venv/bin/activate
-ea run ssos_eclss_loop --agents-mode labeled_rule_base --steps 50
+ea run ssos_eclss_loop --actor-mode labeled_rule_base --steps 50
 ea results
 ```
 
@@ -182,14 +182,14 @@ ros2 launch space_station space_station.launch.py
 cd /path/to/engineering_agents
 PYTHONPATH=src python3 -m scenario.ssos_eclss_loop.scenario_run --backend mock
 PYTHONPATH=src python3 -m scenario.ssos_eclss_loop.scenario_run \
-  --backend mock --agents-mode labeled_rule_base --steps 8
+  --backend mock --actor-mode labeled_rule_base --steps 8
 ```
 
 ### plant_sim (mass-balance plant)
 
 ```bash
 PYTHONPATH=src python3 -m scenario.ssos_eclss_loop.scenario_run \
-  --backend plant_sim --agents-mode labeled_rule_base --steps 72
+  --backend plant_sim --actor-mode labeled_rule_base --steps 72
 ```
 
 See [Plant Sim backend](../memo/ssos_eclss_loop/plant_sim_backend.md) for crew metabolism, WRS closure, and ledger telemetry.

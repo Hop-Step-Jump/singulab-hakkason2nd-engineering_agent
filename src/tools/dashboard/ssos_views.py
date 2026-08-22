@@ -469,7 +469,14 @@ def render_operator_step_panel(
         summary=summary,
     )
     mode = payload.get("agents_mode") or "—"
-    st.caption(f"agents_mode={mode} · step={step}")
+    actor = payload.get("actor_mode")
+    design = payload.get("design_mode")
+    if actor or design:
+        st.caption(
+            f"actor_mode={actor or mode} · design_mode={design or '—'} · step={step}"
+        )
+    else:
+        st.caption(f"agents_mode={mode} · step={step}")
 
     step_messages = payload.get("messages") or []
     if not step_messages:

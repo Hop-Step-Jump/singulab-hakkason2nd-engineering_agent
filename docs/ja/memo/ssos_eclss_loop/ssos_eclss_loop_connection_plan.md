@@ -1,7 +1,8 @@
 # SSOS ECLSS ループ接合プラン
 
 > **対象**: Space Station OS ECLSS（ARS / OGS / WRS）を `engineering_agents` エージェントが Crew Simulation の代わりに操作する。`scrubber_degradation` は Mock 凍結のまま別シナリオ。  
-> **フォローアップ（Phase 8 以降）**: [backlog.md](../backlog.md)（BL-003〜BL-005）
+> **フォローアップ（Phase 8 以降）**: [backlog.md](../backlog.md)（BL-003〜BL-005）  
+> **後続（実装済み）:** シミュレーション内 actor と事後 designer の分離 — [post_run_design_agent.md](post_run_design_agent.md)。ssos の `--agents-mode` は `--actor-mode` の非推奨エイリアス。
 
 ---
 

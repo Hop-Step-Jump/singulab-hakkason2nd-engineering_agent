@@ -221,7 +221,7 @@ simulation stepと装置actionの処理時間を分けた理由は、エージ�
 
 一方、熱負荷や個人差は現在のagent observation・actionに接続されていないため、初期モデルでは対象外とした。
 
-`scenario.yaml` の `plant_sim.crew.size` が乗員数の正本である。帯滞在と物理下限の設計は [乗員サバイバル](occupant_survival.md)。`plant_sim.survival.enabled: true` のとき操作後に帯滞在→物理下限（最終ステップは floor スキップ）。運用エージェントも同じ人数に同期する。N スイープと `plant_sim` ノブの感度は `python3 -m tools.plant_sim_sensitivity_app`（port 8502。survival オフ。3×4）。
+`scenario.yaml` の `plant_sim.crew.size` が乗員数の正本である。帯滞在と物理下限の設計は [乗員サバイバル](occupant_survival.md)。`plant_sim.survival.enabled: true` のとき操作後に帯滞在→物理下限（最終ステップは floor スキップ）。actor も同じ人数に同期する（designer は減らない。[事後設計エージェント](post_run_design_agent.md)）。N スイープと `plant_sim` ノブの感度は `python3 -m tools.plant_sim_sensitivity_app`（port 8502。survival オフ。3×4）。
 
 ---
 

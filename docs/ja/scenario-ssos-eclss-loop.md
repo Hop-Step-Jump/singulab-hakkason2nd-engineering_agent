@@ -71,7 +71,7 @@ SSOS の ECLSS は、閉鎖環境の **CO₂ 除去（ARS）**、**O₂ 生成�
 
 ## 叙事（時系列）
 
-### エージェントなし（`agents.mode: none`）
+### エージェントなし（`agents.actor.mode: none`）
 
 | フェーズ | 内容 |
 | --- | --- |
@@ -95,11 +95,13 @@ SSOS の ECLSS は、閉鎖環境の **CO₂ 除去（ARS）**、**O₂ 生成�
 
 **re-arm**: ARS / OGS を打った後もストレージが改善しなければ、次 step で再試行可能（`co2_at_ars_dispatch` / `o2_at_ogs_dispatch` 境界）。
 
-step は 0-based（`0 .. steps-1`）。代表オペレータ `eclss_operator_{step % N}` がその step のコマンドを発行（policy 代表は 1 体。`max_actions_per_step` は使わない）。事後は代表が `design_proposals.json`（`ssos_graph`）を出力。
+step は 0-based（`0 .. steps-1`）。actor `eclss_actor_{step % N}` が運用コマンドを発行（policy 代表は 1 体。`max_actions_per_step` は使わない）。ラン終了後、別チームの designer（`eclss_designer_*`）が `design_proposals.json`（`ssos_graph`）を出す。
 
 ### llm
 
-各 step: 全 N 体 deliberation を並列 → `agents.max_actions_per_step` 体までの回転代表が `operational_command`（JSON `commands`）を並列発行 → 事後 1 回で `changes` 提案。既定は 1（従来どおり）。`policy` 閾値はプロンプトに含めない（scrubber と同様）。1 体の代表が ARS + OGS など複数 kind を返すのは従来どおり。このパラメータは **コマンドを出すエージェント数** であり、1 体の `commands` リストの上限ではない。
+各 step: 全 N 体の actor が並列 deliberation → `agents.actor.max_actions_per_step` 体までの回転代表が `operational_command`（JSON `commands`）を並列発行（既定 **2**）。`policy` 閾値はプロンプトに含めない。このパラメータは **コマンドを出す actor 数** であり、1 体の `commands` リストの上限ではない。
+
+ラン終了後、designer 全員が 1 ラウンド話し合ったあと、**代表 1 体**が `changes` を出す。件数に上限はない（空ならファイルを書かない）。
 
 ---
 
@@ -107,8 +109,8 @@ step は 0-based（`0 .. steps-1`）。代表オペレータ `eclss_operator_{st
 
 | ファイル | 用途 |
 | --- | --- |
-| [`scenario.yaml`](https://github.com/hirototamura/engineering_agents/blob/main/src/scenario/ssos_eclss_loop/scenario.yaml) | step 数、初期ストレージ、backend 種別、閾値、`agents.mode`、run ID |
-| [`agents.yaml`](https://github.com/hirototamura/engineering_agents/blob/main/src/scenario/ssos_eclss_loop/agents.yaml) | チーム（`eclss_operator_*`）、Persona、`policy`（labeled のみ）、Ollama / vLLM |
+| [`scenario.yaml`](https://github.com/hirototamura/engineering_agents/blob/main/src/scenario/ssos_eclss_loop/scenario.yaml) | step 数、初期ストレージ、backend 種別、閾値、`agents.actor.mode` / `agents.design.mode`、run ID |
+| [`agents.yaml`](https://github.com/hirototamura/engineering_agents/blob/main/src/scenario/ssos_eclss_loop/agents.yaml) | actor チーム（`eclss_actor_*`）、designer チーム（`eclss_designer_*`）、actor `policy`（labeled のみ）、いまは両側とも vLLM `qwen3-8b` |
 
 ### scenario.yaml（主要項目）
 
@@ -142,8 +144,10 @@ subsystem_failures:
     end_step: 20     # 任意・含まない
 
 agents:
-  mode: none  # none | labeled_rule_base | llm
-  max_actions_per_step: 1  # llm のみ。deliberation 後、この人数まで運用コマンドを発行
+  actor:
+    mode: none  # none | labeled_rule_base | llm（CLI --actor-mode）
+    max_actions_per_step: 2  # llm actor のみ
+  design: {}  # design.mode 省略時は actor.mode を継承
 
 output:
   run_id: ssos_eclss_loop_baseline
@@ -151,7 +155,7 @@ output:
   run_id_llm: ssos_eclss_loop_llm
 ```
 
-CLI: `--set agents.max_actions_per_step=8`（`team.count` でクランプ）。`labeled_rule_base` では無視される。
+CLI: `--set agents.actor.max_actions_per_step=8`（`actor.team.count` でクランプ）。`labeled_rule_base` では無視される。
 
 `ssos_graph.rewires`（任意）— 前 run の `graph_rewire` 提案を `--apply-proposals` でマージすると、次 run の `Ros2EclssBridge` に client remap が渡る。
 
@@ -174,21 +178,31 @@ CLI: `--set agents.max_actions_per_step=8`（`team.count` でクランプ）。`
 ### agents.yaml（主要項目）
 
 ```yaml
-team:
-  count: 3
-  id_prefix: eclss_operator
+actor:
+  team:
+    count: 50
+    id_prefix: eclss_actor
+  policy:   # labeled_rule_base のみ。閾値は scenario.yaml から実行時マージ
+    request_co2_before_ogs: false
+    request_co2_amount: 0.025
+    ars_goal:
+      initial_co2_mass: 1.8
+    ogs_goal:
+      input_water_mass: 0.15
+  llm:
+    provider: vllm
+    base_url: http://10.10.0.108:8000/v1
+    model: qwen3-8b  # いまの既定。後で変える
 
-policy:   # labeled_rule_base のみ。閾値は scenario.yaml から実行時マージ
-  request_co2_before_ogs: false
-  request_co2_amount: 0.025
-  ars_goal:
-    initial_co2_mass: 1.8
-  ogs_goal:
-    input_water_mass: 0.015
-
-llm:
-  base_url: http://localhost:11434   # Docker: host.docker.internal（ea-loop が設定）
-  model: gemma4:e4b
+design:
+  team:
+    count: 4
+    id_prefix: eclss_designer
+  llm:
+    provider: vllm
+    base_url: http://10.10.0.108:8000/v1
+    model: qwen3-8b
+    max_tokens: 2048
 ```
 
 ---
@@ -234,10 +248,10 @@ ROS launch ファイル側の remap（Phase 8）は [backlog BL-003](memo/backlo
 
 | 概念 | ssos_eclss_loop |
 | --- | --- |
-| ID | `eclss_operator_1` … `eclss_operator_N`（デフォルト 3） |
+| ID | actor `eclss_actor_1` … `N`（既定 50）；designer `eclss_designer_1` … `4` |
 | deliberation | llm: 全員 1 ラウンド。labeled: 運用判断メッセージ |
-| action reps | llm: `eclss_operator_{step % N}` から `max_actions_per_step` 体の回転窓（既定 1）。labeled: policy 代表 1 体 |
-| post-run rep | 最終 step の代表が `design_proposals.json`（`changes` 非空のときのみ） |
+| action reps | llm: `eclss_actor_{step % N}` から `max_actions_per_step` 体の回転窓（既定 **2**）。labeled: policy 代表 1 体 |
+| post-run rep | designer 代表 1 体が `changes` を出す（件数上限なし。非空のときだけ `design_proposals.json`） |
 
 `SsosEclssLoopTeam` は `Team` ABC を継承。`run_step(backend, obs)` / `apply_outcome(backend, outcome)` シグネチャ。
 
@@ -257,8 +271,8 @@ ROS launch ファイル側の remap（Phase 8）は [backlog BL-003](memo/backlo
 ### mock（ホスト、ROS2 不要）
 
 ```bash
-python -m scenario.ssos_eclss_loop.scenario_run --backend mock --agents-mode labeled_rule_base
-python -m scenario.ssos_eclss_loop.scenario_run --backend mock --agents-mode llm
+python -m scenario.ssos_eclss_loop.scenario_run --backend mock --actor-mode labeled_rule_base
+python -m scenario.ssos_eclss_loop.scenario_run --backend mock --actor-mode llm
 ```
 
 ### plant_sim（ホスト、物質収支プラント）
@@ -266,7 +280,7 @@ python -m scenario.ssos_eclss_loop.scenario_run --backend mock --agents-mode llm
 乗員代謝・WRS 水循環・ledger テレメトリ付きの中忠実度モデル。Docker 不要。
 
 ```bash
-python -m scenario.ssos_eclss_loop.scenario_run --backend plant_sim --agents-mode labeled_rule_base --steps 72
+python -m scenario.ssos_eclss_loop.scenario_run --backend plant_sim --actor-mode labeled_rule_base --steps 72
 ```
 
 詳細: [Plant Sim backend 解説](memo/ssos_eclss_loop/plant_sim_backend.md)。乗員減員: [乗員サバイバル](memo/ssos_eclss_loop/occupant_survival.md)。
@@ -279,18 +293,18 @@ python -m scenario.ssos_eclss_loop.scenario_run --backend plant_sim --agents-mod
 # コンテナ内: bash /root/ssos-eclss-headless.sh
 
 # Terminal 2: ホスト repo ルート
-./scripts/run_ssos_eclss_loop.sh --agents-mode labeled_rule_base
-./scripts/run_ssos_eclss_loop.sh --agents-mode llm
+./scripts/run_ssos_eclss_loop.sh --actor-mode labeled_rule_base
+./scripts/run_ssos_eclss_loop.sh --actor-mode llm
 ```
 
-コンテナ内直接: `ea-loop --agents-mode labeled_rule_base`（`OLLAMA_BASE_URL=host.docker.internal` 既定）。
+コンテナ内直接: `ea-loop --actor-mode labeled_rule_base`（`OLLAMA_BASE_URL=host.docker.internal` 既定）。
 
 ### 前 run の設計提案を次 run に適用
 
 `--apply-proposals` は **シミュレーション開始前**に、ディスク上の `scenario.yaml` / `agents.yaml` を書き換えず、**メモリ上にロードした設定へマージ**する。適用後の実効設定は結果ディレクトリの `scenario_config.yaml` / `agents_config.yaml` に出力される。
 
 ```bash
-python -m scenario.ssos_eclss_loop.scenario_run --backend mock --agents-mode llm \
+python -m scenario.ssos_eclss_loop.scenario_run --backend mock --actor-mode llm \
   --apply-proposals src/experiments/results/ssos_eclss_loop_llm/design_proposals.json
 ```
 
@@ -334,10 +348,12 @@ python -m scenario.ssos_eclss_loop.scenario_run --backend mock --agents-mode llm
 
 ### design_proposals.json（ssos_graph）
 
+`changes` は代表 1 体が出すリストで、件数に上限はない。
+
 ```json
 {
   "design_domain": "ssos_graph",
-  "proposed_by": "eclss_operator_2",
+  "proposed_by": "eclss_designer_1",
   "decision_source": "rule",
   "message": "Raise ARS initial_co2_mass for faster vent cycles.",
   "changes": [
@@ -391,8 +407,9 @@ scrubber 向けスクリーンショット: [概要](overview.md#一目でわか
 
 | テスト | 内容 |
 | --- | --- |
+| `test_ssos_eclss_loop.py` | シナリオ e2e、乗員 bind、事後設計 |
+| `test_ssos_agent_config.py` | 入れ子の `agents.actor` / `agents.design` と mode 継承 |
 | `test_ssos_eclss_loop_team.py` | `SsosEclssLoopTeam`、labeled / llm、Team 継承 |
-| `test_ssos_eclss_loop_scenario.py` | mock シナリオ end-to-end |
 | `test_graph_rewire.py` | client remap 単体 |
 | `test_graph_rewire_integration.py` | `Ros2EclssBridge` 統合（ROS なしは skip） |
 
@@ -409,6 +426,7 @@ pytest tests/environment/test_graph_rewire*.py -q
 
 - [architecture.md](architecture.md) — レイヤと ssos 実行フロー
 - [api-contracts.md](api-contracts.md) — `EclssBackend`、JSONL、運用コマンド
+- [memo/ssos_eclss_loop/post_run_design_agent.md](memo/ssos_eclss_loop/post_run_design_agent.md) — actor / designer 分離（実装済み）
 - [one-piece-integration.md](one-piece-integration.md) — 運用 provenance
 - [development-plan.md](development-plan.md) — Phase 0–7 完了、次タスク
 - [memo/ssos_eclss_loop/ssos_eclss_loop_connection_plan.md](memo/ssos_eclss_loop/ssos_eclss_loop_connection_plan.md) — 接合プラン詳細・検証手順

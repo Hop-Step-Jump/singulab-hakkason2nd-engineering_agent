@@ -47,6 +47,28 @@ def test_resolve_run_id_uses_agents_mode_mapping():
     assert run_id == "llm_run"
 
 
+def test_resolve_run_id_ssos_mixed_modes_do_not_clobber_baseline():
+    run_id = resolve_run_id(
+        "ssos_eclss_loop",
+        {
+            "run_id": "ssos_eclss_loop_baseline",
+            "run_id_labeled_rule_base": "ssos_eclss_loop_labeled_rule_base",
+            "run_id_llm": "ssos_eclss_loop_llm",
+        },
+        {"actor": {"mode": "none"}, "design": {"mode": "llm"}},
+    )
+    assert run_id == "ssos_eclss_loop_none_llm"
+
+
+def test_resolve_run_id_ssos_matching_modes_keep_legacy_ids():
+    labeled = resolve_run_id(
+        "ssos_eclss_loop",
+        {"run_id": "baseline", "run_id_labeled_rule_base": "labeled"},
+        {"actor": {"mode": "labeled_rule_base"}, "design": {}},
+    )
+    assert labeled == "labeled"
+
+
 def test_resolve_run_id_rejects_path_traversal():
     with pytest.raises(ValueError, match="path separators"):
         resolve_run_id(

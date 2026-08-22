@@ -21,12 +21,22 @@ from environment.ssos.eclss.types import EclssTelemetrySnapshot
 from integrations.one_piece import export_run_provenance
 from scenario.agents.eclss_loop_types import EclssLoopObservation
 from scenario.agents.ssos_eclss_loop_team import SsosEclssLoopTeam
+from scenario.agents.ssos_post_run_design import (
+    DesignReviewBundle,
+    PostRunDesignAgent,
+    actor_snapshot_from_team,
+)
 from scenario.jobs.resolve import resolve_run_directory
 from scenario.runner import (
     _deep_merge,
     load_agents_config,
     scenario_config_path,
     write_effective_configs,
+)
+from scenario.ssos_eclss_loop.agent_config import (
+    flatten_actor_config,
+    flatten_design_config,
+    resolve_ssos_modes,
 )
 from scenario.ssos_eclss_loop.health import (
     build_effective_thresholds,
@@ -174,7 +184,7 @@ def bind_plant_sim_crew_and_team(
     agents_config: Optional[Dict[str, Any]],
     backend_kind: str,
 ) -> None:
-    """Require YAML occupant count for plant_sim; keep operators in lock-step."""
+    """Require YAML occupant count for plant_sim; keep actors in lock-step."""
     if backend_kind != "plant_sim":
         return
     crew = ((config.get("plant_sim") or {}).get("crew") or {})
@@ -185,15 +195,16 @@ def bind_plant_sim_crew_and_team(
     crew_size = int(crew["size"])
     if agents_config is None:
         return
-    team = agents_config.setdefault("team", {})
+    actor = agents_config.setdefault("actor", {})
+    team = actor.setdefault("team", {})
     if "count" not in team:
         team["count"] = crew_size
         return
     team_count = int(team["count"])
     if team_count != crew_size:
         raise ValueError(
-            f"plant_sim.crew.size ({crew_size}) must match team.count ({team_count}); "
-            "occupants and operators are the same people"
+            f"plant_sim.crew.size ({crew_size}) must match actor.team.count ({team_count}); "
+            "occupants and actors are the same people"
         )
 
 
@@ -320,10 +331,10 @@ class SsosEclssLoopScenario(Scenario):
             agents_config = load_agents_config(self.name, config)
         if not agents_config:
             return None
-        mode = agents_config.get("mode")
-        if mode not in {"labeled_rule_base", "llm"}:
+        actor = flatten_actor_config(agents_config)
+        if actor.get("mode") not in {"labeled_rule_base", "llm"}:
             return None
-        return SsosEclssLoopTeam(agents_config)
+        return SsosEclssLoopTeam(actor)
 
     def run(
         self,
@@ -498,10 +509,13 @@ class SsosEclssLoopScenario(Scenario):
         finally:
             clear_scheduled_subsystem_failures(backend, failure_schedule)
 
+        actor_mode, design_mode = resolve_ssos_modes(agents_config or {})
         summary: Dict[str, Any] = {
             "scenario": self.name,
             "backend": backend_kind,
-            "agents_mode": (agents_config or {}).get("mode", "none"),
+            "actor_mode": actor_mode,
+            "design_mode": design_mode,
+            "agents_mode": actor_mode,
             "steps": steps,
             "inject_failures": inject_failures,
             **_telemetry_summary_fields(last_snap, peak_co2, min_o2),
@@ -539,17 +553,37 @@ class SsosEclssLoopScenario(Scenario):
             )
         )
 
-        if isinstance(team, SsosEclssLoopTeam) and team.mode in {"labeled_rule_base", "llm"}:
+        if isinstance(team, SsosEclssLoopTeam):
             summary["team_count"] = team.team_cfg.count
             summary["agent_ids"] = list(team.team_cfg.agent_ids)
             summary["agent_ids_remaining"] = list(team.active_ids)
             if team.mode == "llm":
                 summary["max_actions_per_step"] = team.max_actions_per_step
-            proposals = team.propose_post_run_design(summary)
+
+        if design_mode in {"labeled_rule_base", "llm"} and agents_config:
+            actor_cfg = flatten_actor_config(agents_config)
+            design_cfg = flatten_design_config(agents_config)
+            designer = PostRunDesignAgent(design_cfg)
+            proposals = designer.propose(
+                DesignReviewBundle(
+                    summary=summary,
+                    scenario_config=config,
+                    baseline_graph=dict(config.get("ssos_graph") or {}),
+                    policy=dict(actor_cfg.get("policy") or {}),
+                    actor_snapshot=actor_snapshot_from_team(team) if team is not None else None,
+                )
+            )
             # L8/B: only persist when there is at least one change so
             # --apply-proposals never no-ops from an empty document.
             change_count = len(proposals.get("changes") or [])
             summary["design_proposal_count"] = change_count
+            summary["design_proposed_by"] = proposals.get("proposed_by")
+            summary["design_decision_source"] = proposals.get("decision_source")
+            for msg in proposals.pop("deliberation_messages", []) or []:
+                if isinstance(msg, dict):
+                    log.append("messages", msg)
+                    message_count += 1
+            summary["message_count"] = message_count
             if change_count > 0:
                 proposals_path = run_dir / "design_proposals.json"
                 write_design_proposals(proposals_path, proposals)
@@ -585,9 +619,19 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
     parser.add_argument("--output-dir", type=Path, help="Run output directory")
     parser.add_argument(
+        "--actor-mode",
+        choices=("none", "labeled_rule_base", "llm"),
+        help="Override agents.actor.mode",
+    )
+    parser.add_argument(
+        "--design-mode",
+        choices=("none", "labeled_rule_base", "llm"),
+        help="Override agents.design.mode",
+    )
+    parser.add_argument(
         "--agents-mode",
         choices=("none", "labeled_rule_base", "llm"),
-        help="Override agents.mode from scenario.yaml",
+        help="Deprecated alias for --actor-mode",
     )
     parser.add_argument("--steps", type=int, help="Override simulation.steps")
     parser.add_argument(
@@ -601,8 +645,14 @@ def main(argv: Optional[list[str]] = None) -> int:
     overrides: Dict[str, Any] = {}
     if args.backend:
         overrides["backend"] = {"kind": args.backend}
-    if args.agents_mode:
-        overrides["agents"] = {"mode": args.agents_mode}
+    if args.agents_mode and args.actor_mode:
+        print("Specify only one of --actor-mode and --agents-mode", file=sys.stderr)
+        return 2
+    actor_mode = args.actor_mode or args.agents_mode
+    if actor_mode:
+        overrides.setdefault("agents", {}).setdefault("actor", {})["mode"] = actor_mode
+    if args.design_mode:
+        overrides.setdefault("agents", {}).setdefault("design", {})["mode"] = args.design_mode
     if args.steps is not None:
         overrides["simulation"] = {"steps": args.steps}
 

@@ -127,6 +127,7 @@ Details: [memo/scrubber_degradation/mvp_plan.md](memo/scrubber_degradation/mvp_p
 | --- | --- |
 | [mvp_plan.md](memo/scrubber_degradation/mvp_plan.md) | Week roadmap, Day 1–10 |
 | [ssos_eclss_loop/ssos_eclss_loop_connection_plan.md](memo/ssos_eclss_loop/ssos_eclss_loop_connection_plan.md) | SSOS ECLSS Phase 0–7 details and verification steps |
+| [ssos_eclss_loop/post_run_design_agent.md](memo/ssos_eclss_loop/post_run_design_agent.md) | Actor / designer split; unbounded post-run `changes` |
 | [ssos_eclss_loop/ssos_eps_ros2_connection_plan.md](memo/ssos_eclss_loop/ssos_eps_ros2_connection_plan.md) | EPS ROS2 bridge (Phase 3) |
 | [ssos_eclss_loop/ssos_ros2_graph_design_investigation.md](memo/ssos_eclss_loop/ssos_ros2_graph_design_investigation.md) | Gateway and remap investigation |
 | [backlog.md](memo/backlog.md) | BL-001–BL-007 (emergent roles, Phase 8, ECLSS/EPS, CLI v3 out-of-scope, step-sync consideration) |

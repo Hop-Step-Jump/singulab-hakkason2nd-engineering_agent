@@ -128,7 +128,7 @@
 | 表の列             | 本デモでの主体                                | 出力・実装                                     | 備考                                          |
 | --------------- | -------------------------------------- | ----------------------------------------- | ------------------------------------------- |
 | **監督（人間 + AI）** | One Piece（将来）／現状は `scenario.yaml` でスタブ | `scenario.yaml`, `messages.jsonl`         | 本リポジトリの主スコープ外。要求の正本は One Piece へ移す予定        |
-| **設計（AI）**      | 代表エンジニア（LLM またはルール）                    | `design_proposals.json`                   | 設計要求への適合 + 物理原理に沿った設計条件。ランタイム中はシミュレータに適用しない |
+| **設計（AI）**      | 事後の designer チーム（LLM またはルール。シミュレーション内 actor ではない） | `design_proposals.json`                   | 設計要求への適合 + 物理原理に沿った設計条件。ランタイム中はシミュレータに適用しない |
 | **検証・仮想世界**     | 物理シミュレーション + 検証ブリッジ                    | `telemetry.jsonl`, `health_metrics.jsonl` | 設計提案を入力にシミュレーション → 検証要求を決定論的に確認             |
 | **検証・物理世界**     | N/A                                    | —                                         | 本リポジトリのスコープ外                                |
 
@@ -210,17 +210,19 @@ integrations/one_piece  ← scenario から呼び出し
 - `environment` にエージェントロジックや Ollama / vLLM 依存を入れる。
 - テレメトリや閾値を「だいたい」で丸めて合格扱いにする。
 
-### エージェントモード（`agents.mode`）
+### エージェントモード
+
+scrubber は従来どおりフラットな `agents.mode`。`ssos_eclss_loop` は **actor**（シミュレーション内の運用）と **design**（事後の設計提案）を独立に持つ（`agents.actor.mode` / `agents.design.mode`）。design.mode を省略すると actor.mode を継承する。
 
 
 | モード                 | 用途                 |
 | ------------------- | ------------------ |
-| `none`              | ベースライン（エージェントなし）   |
+| `none`              | その側をオフ（ベースライン）     |
 | `labeled_rule_base` | 再現性の高い正解比較・回帰テスト   |
 | `llm`               | 状況判断・議論・設計提案の多様性実験 |
 
 
-`labeled_rule_base` は検証パイプラインの**足場**（監督・設計の比較用）。`llm` は設計・監督の AI 側実験。いずれも仮想世界の物理検証はシミュレータが担う。
+ssos では `--actor-mode labeled_rule_base --design-mode llm` で安価な actor と大きな designer を分けられる。`labeled_rule_base` は検証パイプラインの**足場**。仮想世界の物理検証はシミュレータが担う。
 
 ### テストと実行
 
@@ -258,7 +260,8 @@ LLM モードは Ollama または研究室 vLLM が必要。CI・回帰は Fake 
 | [docs/one-piece-integration.md](one-piece-integration.md)               | One Piece 連携（現状 provenance のみ。要求 pull は将来） |
 | [docs/scenario-scrubber-degradation.md](scenario-scrubber-degradation.md) | 参照シナリオの仕様                                  |
 | [docs/scenario-ssos-eclss-loop.md](scenario-ssos-eclss-loop.md) | SSOS 実 ECLSS シナリオ（Phase 0–7） |
-| [乗員サバイバル](memo/ssos_eclss_loop/occupant_survival.md) | plant_sim の乗員・運用エージェント減員（帯滞在） |
+| [乗員サバイバル](memo/ssos_eclss_loop/occupant_survival.md) | plant_sim の乗員・actor 減員（帯滞在） |
+| [事後設計エージェント](memo/ssos_eclss_loop/post_run_design_agent.md) | ssos の actor / designer 分離（実装済み） |
 
 ---
 

@@ -4,6 +4,7 @@ from core.agents.persona import (
     REASONING_WORD_LIMIT,
     PersonaAgent,
     PersonaPromptBuilder,
+    eclss_design_proposal_contract,
     load_team,
     message_contract,
 )
@@ -57,6 +58,14 @@ def test_load_team_builds_engineer_ids():
     assert team.agent_ids == ("engineer_1", "engineer_2", "engineer_3")
     assert team.action_rep_id(1) == "engineer_1"
     assert team.action_rep_id(2) == "engineer_2"
+
+
+def test_eclss_design_contract_allows_any_number_of_changes():
+    contract = eclss_design_proposal_contract()
+    assert "no count cap" in contract
+    hint = PersonaAgent.phase_hint(DeliberationPhase.POST_RUN)
+    assert "no count cap" in hint
+    assert "sole representative" in hint
 
 
 def test_action_round_hint_default_matches_single_rep():

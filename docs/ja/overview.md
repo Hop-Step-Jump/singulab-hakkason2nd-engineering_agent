@@ -91,7 +91,7 @@ SSOS の ECLSS は、閉鎖環境の **CO₂ 除去（ARS）**、**O₂ 生成�
 
 ## なぜ LLM か（ルールベースとの違い）
 
-両シナリオとも `agents.mode` は `none` / `labeled_rule_base` / `llm`。**同種 N 体 + 代表 action** のチーム設計は共通です（scrubber: `engineer_*`、ssos: `eclss_operator_*`）。
+両シナリオともモードは `none` / `labeled_rule_base` / `llm`。scrubber はフラットな `agents.mode`。ssos は **actor**（`agents.actor.mode`）と **design**（`agents.design.mode`。省略時は actor を継承）を分ける。**同種 N 体 + 代表 action** は共通です（scrubber: `engineer_*`、ssos actor: `eclss_actor_*`、ssos designer: `eclss_designer_*`）。
 
 | | `labeled_rule_base` | `llm` |
 | --- | --- | --- |
@@ -164,9 +164,10 @@ SSOS の ECLSS は、閉鎖環境の **CO₂ 除去（ARS）**、**O₂ 生成�
 | シナリオ | ID プレフィックス | デフォルト人数 | 代表 action |
 | --- | --- | --- | --- |
 | scrubber | `engineer` | 4 | `engineer_{(step-1) % N}` |
-| ssos | `eclss_operator` | 3 | `eclss_operator_{step % N}`（0-based steps） |
+| ssos actor | `eclss_actor` | 50 | `eclss_actor_{step % N}`（0-based steps） |
+| ssos designer | `eclss_designer` | 4 | ラン終了後の代表 1 体（`changes`、件数上限なし） |
 
-各 step で全員が議論（llm）またはルール診断（labeled）。**事後設計**は最終 step の代表が `design_proposals.json` を出力。
+各 step で actor 全員が議論（llm）またはルール診断（labeled）。ssos の **事後設計**は別チームの designer が `design_proposals.json` を出す。設計: [事後設計エージェント](memo/ssos_eclss_loop/post_run_design_agent.md)。
 
 ---
 
@@ -425,9 +426,9 @@ ea run scrubber_degradation --agents-mode llm
 #### mock（ホスト、ROS2 不要）
 
 ```bash
-ea run ssos_eclss_loop --backend mock --agents-mode none
-ea run ssos_eclss_loop --backend mock --agents-mode labeled_rule_base
-ea run ssos_eclss_loop --backend mock --agents-mode llm
+ea run ssos_eclss_loop --backend mock --actor-mode none
+ea run ssos_eclss_loop --backend mock --actor-mode labeled_rule_base
+ea run ssos_eclss_loop --backend mock --actor-mode llm
 ```
 
 出力先例: `src/experiments/results/ssos_eclss_loop_labeled_rule_base/`
@@ -435,7 +436,7 @@ ea run ssos_eclss_loop --backend mock --agents-mode llm
 PowerShell では次のように実行できます。
 
 ```powershell
-python -m scenario.ssos_eclss_loop.scenario_run --backend mock --agents-mode labeled_rule_base --steps 8
+python -m scenario.ssos_eclss_loop.scenario_run --backend mock --actor-mode labeled_rule_base --steps 8
 ```
 
 #### ros2（SSOS Docker 内）
@@ -446,16 +447,16 @@ python -m scenario.ssos_eclss_loop.scenario_run --backend mock --agents-mode lab
 # コンテナ内: bash /root/ssos-eclss-headless.sh
 
 # Terminal 2: ホスト repo ルート
-./scripts/run_ssos_eclss_loop.sh --agents-mode labeled_rule_base
-./scripts/run_ssos_eclss_loop.sh --agents-mode llm
+./scripts/run_ssos_eclss_loop.sh --actor-mode labeled_rule_base
+./scripts/run_ssos_eclss_loop.sh --actor-mode llm
 ```
 
-コンテナ内: `ea-loop --agents-mode labeled_rule_base`（`src/` 同期済み前提）。
+コンテナ内: `ea-loop --actor-mode labeled_rule_base`（`src/` 同期済み前提）。
 
 前 run の設計提案を次 run に反映:
 
 ```bash
-python -m scenario.ssos_eclss_loop.scenario_run --backend mock --agents-mode llm \
+python -m scenario.ssos_eclss_loop.scenario_run --backend mock --actor-mode llm \
   --apply-proposals src/experiments/results/ssos_eclss_loop_llm/design_proposals.json
 ```
 

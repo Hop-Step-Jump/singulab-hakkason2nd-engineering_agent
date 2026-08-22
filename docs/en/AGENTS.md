@@ -128,7 +128,7 @@ The **Supervision** column is One Piece’s responsibility. In the current MVP, 
 | Table column | Actor in this demo | Output / implementation | Notes |
 | --------------- | -------------------------------------- | ----------------------------------------- | ------------------------------------------- |
 | **Supervision (human + AI)** | One Piece (future) / currently stubbed in `scenario.yaml` | `scenario.yaml`, `messages.jsonl` | Out of primary scope for this repo. Canonical requirements will move to One Piece |
-| **Design (AI)** | Lead engineer (LLM or rules) | `design_proposals.json` | Fit to design requirements + physically sound design conditions. Not applied to simulator during runtime |
+| **Design (AI)** | Post-run designer team (LLM or rules; not in-sim actors) | `design_proposals.json` | Fit to design requirements + physically sound design conditions. Not applied to simulator during runtime |
 | **Verification · virtual world** | Physics simulation + verification bridge | `telemetry.jsonl`, `health_metrics.jsonl` | Simulation from design proposals → deterministic verification requirement checks |
 | **Verification · physical world** | N/A | — | Out of scope for this repository |
 
@@ -210,17 +210,19 @@ Do not import upper layers from lower layers. Do not put LLM or Persona in `envi
 - Put agent logic or Ollama / vLLM dependencies in `environment`.
 - Round telemetry or thresholds loosely to force pass.
 
-### Agent modes (`agents.mode`)
+### Agent modes
+
+Scrubber still uses flat `agents.mode`. `ssos_eclss_loop` uses **actor** (in-sim ops) and **design** (post-run proposals) independently (`agents.actor.mode` / `agents.design.mode`). Design mode omitted inherits actor mode.
 
 
 | Mode | Use |
 | ------------------- | ------------------ |
-| `none` | Baseline (no agents) |
+| `none` | Baseline (that side off) |
 | `labeled_rule_base` | Highly reproducible ground-truth comparison and regression |
 | `llm` | Experiments in situational judgment, discussion, and diversity of design proposals |
 
 
-`labeled_rule_base` is **scaffolding** for the verification pipeline (comparison for supervision and design). `llm` is the AI-side experiment for design and supervision. In both cases, virtual-world physics verification is the simulator’s job.
+On ssos, cheap actors + a larger designer is `--actor-mode labeled_rule_base --design-mode llm`. `labeled_rule_base` is **scaffolding** for the verification pipeline. Virtual-world physics verification is the simulator’s job.
 
 ### Test and run
 
@@ -258,7 +260,8 @@ This is **not** the same as the `first_principles` **thinking-style archetype** 
 | [one-piece-integration.md](one-piece-integration.md) | One Piece integration (provenance only for now; requirement pull is future) |
 | [scenario-scrubber-degradation.md](scenario-scrubber-degradation.md) | Reference scenario specification |
 | [docs/scenario-ssos-eclss-loop.md](scenario-ssos-eclss-loop.md) | SSOS live ECLSS scenario (Phase 0–7) |
-| [Occupant survival](memo/ssos_eclss_loop/occupant_survival.md) | plant_sim crew/operator attrition (band dwell) |
+| [Occupant survival](memo/ssos_eclss_loop/occupant_survival.md) | plant_sim crew/actor attrition (band dwell) |
+| [Post-run design agent](memo/ssos_eclss_loop/post_run_design_agent.md) | ssos actor / designer split (as shipped) |
 
 ---
 

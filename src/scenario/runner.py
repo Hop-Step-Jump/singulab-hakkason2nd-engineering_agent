@@ -55,16 +55,39 @@ def load_scenario_config(name: str, overrides: Optional[Dict[str, Any]] = None) 
 
 def load_agents_config(name: str, scenario_config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     agents_section = scenario_config.get("agents") or {}
-    mode = agents_section.get("mode", "none")
-    if mode == "none":
-        return None
-
     agents_path = agents_config_path(name)
     if agents_path.exists():
         with agents_path.open(encoding="utf-8") as f:
             agents_yaml = yaml.safe_load(f) or {}
     else:
         agents_yaml = {}
+
+    if name == "ssos_eclss_loop":
+        from scenario.ssos_eclss_loop.agent_config import (
+            normalize_ssos_agents_section,
+            resolve_ssos_modes,
+            ssos_agents_enabled,
+        )
+
+        normalized = normalize_ssos_agents_section(agents_section)
+        merged = _deep_merge(agents_yaml, normalized)
+        actor_mode, design_mode = resolve_ssos_modes(merged)
+        merged.setdefault("actor", {})["mode"] = actor_mode
+        merged.setdefault("design", {})["mode"] = design_mode
+        # Legacy alias: apply_design_proposals still accepts agents.policy.*
+        # and dual-writes agents.actor.policy.*. Keep lifting so older
+        # design_proposals.json files remain effective without this merge.
+        applied_policy = agents_section.get("policy")
+        if applied_policy:
+            actor = merged.setdefault("actor", {})
+            actor["policy"] = _deep_merge(actor.get("policy") or {}, applied_policy)
+        if not ssos_agents_enabled(merged):
+            return None
+        return merged
+
+    mode = agents_section.get("mode", "none")
+    if mode == "none":
+        return None
 
     merged = _deep_merge(agents_yaml, {k: v for k, v in agents_section.items() if k != "config_file"})
     merged["mode"] = mode
@@ -165,13 +188,18 @@ def build_simulator(config: Dict[str, Any]) -> StationSimulator:
 def build_agent_team(scenario_name: str, agents_config: Optional[Dict[str, Any]]):
     if not agents_config:
         return None
+    if scenario_name == "ssos_eclss_loop":
+        from scenario.ssos_eclss_loop.agent_config import flatten_actor_config
+
+        actor = flatten_actor_config(agents_config)
+        if actor.get("mode") not in {"labeled_rule_base", "llm"}:
+            return None
+        return SsosEclssLoopTeam(actor)
     mode = agents_config.get("mode")
     if mode not in {"labeled_rule_base", "llm"}:
         return None
     if scenario_name == "scrubber_degradation":
         return ScrubberDegradationTeam(agents_config)
-    if scenario_name == "ssos_eclss_loop":
-        return SsosEclssLoopTeam(agents_config)
     raise ValueError(f"No agent team for scenario: {scenario_name}")
 
 

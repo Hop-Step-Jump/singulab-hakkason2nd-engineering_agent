@@ -10,7 +10,7 @@ from __future__ import annotations
 import copy
 import json
 from pathlib import Path
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, Optional
 
 from scenario.ssos_eclss_loop.health import (
     DEFAULT_CO2_STORAGE_HIGH_KG,
@@ -36,7 +36,10 @@ ACTION_PROFILE_FIELDS_BY_SUBSYSTEM = {
 
 ALLOWED_SET_PARAMETER_TARGETS = frozenset(
     {
-        "agents.policy.co2_storage_high_kg",
+        "agents.actor.policy.co2_storage_high_kg",
+        "agents.actor.policy.o2_storage_low_kg",
+        "agents.actor.policy.product_water_low_l",
+        "agents.policy.co2_storage_high_kg",  # alias of agents.actor.policy.*
         "agents.policy.o2_storage_low_kg",
         "agents.policy.product_water_low_l",
         "thresholds.co2_storage_high_kg",
@@ -45,6 +48,15 @@ ALLOWED_SET_PARAMETER_TARGETS = frozenset(
         "thresholds.product_water_low_l",
     }
 )
+
+_POLICY_FIELD_ALIASES = {
+    "agents.actor.policy.co2_storage_high_kg": "agents.policy.co2_storage_high_kg",
+    "agents.actor.policy.o2_storage_low_kg": "agents.policy.o2_storage_low_kg",
+    "agents.actor.policy.product_water_low_l": "agents.policy.product_water_low_l",
+    "agents.policy.co2_storage_high_kg": "agents.actor.policy.co2_storage_high_kg",
+    "agents.policy.o2_storage_low_kg": "agents.actor.policy.o2_storage_low_kg",
+    "agents.policy.product_water_low_l": "agents.actor.policy.product_water_low_l",
+}
 
 ApplyHandler = Callable[[Dict[str, Any], Dict[str, Any]], None]
 
@@ -110,44 +122,64 @@ def _filter_action_profile_fields(subsystem: str, fields: Dict[str, Any]) -> Dic
     return filtered
 
 
+def _policy_sinks(config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Canonical ``agents.actor.policy`` plus legacy ``agents.policy`` alias."""
+    agents = config.setdefault("agents", {})
+    legacy = agents.setdefault("policy", {})
+    canonical = agents.setdefault("actor", {}).setdefault("policy", {})
+    if canonical is legacy:
+        return [canonical]
+    return [legacy, canonical]
+
+
 def _apply_action_profile(config: Dict[str, Any], payload: Dict[str, Any]) -> None:
     subsystem = str(payload.get("subsystem", "")).lower()
     fields = payload.get("fields") or {}
     if not isinstance(fields, dict):
         raise ValueError("action_profile.fields must be an object")
     filtered = _filter_action_profile_fields(subsystem, fields)
-    policy = config.setdefault("agents", {}).setdefault("policy", {})
-    if subsystem == "ars":
-        policy.setdefault("ars_goal", {}).update(filtered)
-    elif subsystem == "ogs":
-        policy.setdefault("ogs_goal", {}).update(filtered)
-    elif subsystem == "wrs":
-        policy.setdefault("wrs_goal", {}).update(filtered)
-    else:
-        raise ValueError(f"action_profile subsystem must be ars, ogs, or wrs, got {subsystem!r}")
+    for policy in _policy_sinks(config):
+        if subsystem == "ars":
+            policy.setdefault("ars_goal", {}).update(filtered)
+        elif subsystem == "ogs":
+            policy.setdefault("ogs_goal", {}).update(filtered)
+        elif subsystem == "wrs":
+            policy.setdefault("wrs_goal", {}).update(filtered)
+        else:
+            raise ValueError(f"action_profile subsystem must be ars, ogs, or wrs, got {subsystem!r}")
 
 
 def _apply_service_config(config: Dict[str, Any], payload: Dict[str, Any]) -> None:
     import math
 
     service = str(payload.get("service", "")).lower()
-    policy = config.setdefault("agents", {}).setdefault("policy", {})
-    if service == "request_co2":
-        if "amount" in payload:
-            amount = float(payload["amount"])
-            if not math.isfinite(amount) or amount <= 0.0:
-                raise ValueError("request_co2 amount must be finite and positive")
-            policy["request_co2_amount"] = amount
-        if "before_ogs" in payload:
-            policy["request_co2_before_ogs"] = bool(payload["before_ogs"])
-    elif service == "request_o2":
-        if "amount" in payload:
-            amount = float(payload["amount"])
-            if not math.isfinite(amount) or amount <= 0.0:
-                raise ValueError("request_o2 amount must be finite and positive")
-            policy["request_o2_amount"] = amount
-    else:
+    if service not in {"request_co2", "request_o2"}:
         raise ValueError(f"unsupported service_config service: {service!r}")
+    for policy in _policy_sinks(config):
+        if service == "request_co2":
+            if "amount" in payload:
+                amount = float(payload["amount"])
+                if not math.isfinite(amount) or amount <= 0.0:
+                    raise ValueError("request_co2 amount must be finite and positive")
+                policy["request_co2_amount"] = amount
+            if "before_ogs" in payload:
+                policy["request_co2_before_ogs"] = bool(payload["before_ogs"])
+        elif service == "request_o2":
+            if "amount" in payload:
+                amount = float(payload["amount"])
+                if not math.isfinite(amount) or amount <= 0.0:
+                    raise ValueError("request_o2 amount must be finite and positive")
+                policy["request_o2_amount"] = amount
+
+
+def _write_dotted_target(config: Dict[str, Any], target: str, value: Any) -> None:
+    parts = target.split(".")
+    cursor: Any = config
+    for part in parts[:-1]:
+        if part not in cursor or not isinstance(cursor[part], dict):
+            cursor[part] = {}
+        cursor = cursor[part]
+    cursor[parts[-1]] = value
 
 
 def _apply_set_parameter(config: Dict[str, Any], payload: Dict[str, Any]) -> None:
@@ -161,13 +193,10 @@ def _apply_set_parameter(config: Dict[str, Any], payload: Dict[str, Any]) -> Non
             f"set_parameter.target {target!r} is not allowed. Allowed targets: {allowed}"
         )
 
-    parts = target.split(".")
-    cursor: Any = config
-    for part in parts[:-1]:
-        if part not in cursor or not isinstance(cursor[part], dict):
-            cursor[part] = {}
-        cursor = cursor[part]
-    cursor[parts[-1]] = value
+    _write_dotted_target(config, target, value)
+    alias = _POLICY_FIELD_ALIASES.get(target)
+    if alias is not None:
+        _write_dotted_target(config, alias, value)
 
 
 def _apply_graph_rewire(config: Dict[str, Any], payload: Dict[str, Any]) -> None:
@@ -176,6 +205,8 @@ def _apply_graph_rewire(config: Dict[str, Any], payload: Dict[str, Any]) -> None
     rewires = graph.setdefault("rewires", [])
     if not isinstance(rewires, list):
         raise ValueError("ssos_graph.rewires must be a list")
+    if not payload:
+        raise ValueError("graph_rewire.payload must be a non-empty object")
     rewires.append(copy.deepcopy(payload))
 
 
@@ -185,6 +216,25 @@ _APPLY_HANDLERS: Dict[str, ApplyHandler] = {
     "set_parameter": _apply_set_parameter,
     "graph_rewire": _apply_graph_rewire,
 }
+
+
+def validate_ssos_proposal_change(
+    change_kind: str,
+    payload: Dict[str, Any],
+) -> Optional[Dict[str, Any]]:
+    """Return *payload* if apply would accept it; otherwise None.
+
+    Parse and ``--apply-proposals`` share this gate so invalid LLM changes
+    never land in ``design_proposals.json``.
+    """
+    handler = _APPLY_HANDLERS.get(change_kind)
+    if handler is None:
+        return None
+    try:
+        handler({}, payload)
+    except (TypeError, ValueError):
+        return None
+    return payload
 
 
 def apply_design_proposals(
@@ -348,7 +398,7 @@ def build_design_proposals_from_run(
         if proposed_high > 0.0 and proposed_high != co2_high:
             _append_threshold_bump(
                 changes,
-                target_policy="agents.policy.co2_storage_high_kg",
+                target_policy="agents.actor.policy.co2_storage_high_kg",
                 target_thresholds="thresholds.co2_storage_high_kg",
                 value=proposed_high,
                 why=co2_why,
@@ -449,7 +499,7 @@ def build_design_proposals_from_run(
             if proposed_high > 0.0 and proposed_high != co2_high:
                 _append_threshold_bump(
                     changes,
-                    target_policy="agents.policy.co2_storage_high_kg",
+                    target_policy="agents.actor.policy.co2_storage_high_kg",
                     target_thresholds="thresholds.co2_storage_high_kg",
                     value=proposed_high,
                     why="No stressed branch matched; fallback CO2 threshold adjustment.",
@@ -461,7 +511,7 @@ def build_design_proposals_from_run(
                 if proposed_low > 0.0 and proposed_low != o2_low:
                     _append_threshold_bump(
                         changes,
-                        target_policy="agents.policy.o2_storage_low_kg",
+                        target_policy="agents.actor.policy.o2_storage_low_kg",
                         target_thresholds="thresholds.o2_storage_low_kg",
                         value=proposed_low,
                         why="No stressed branch matched; fallback O2 threshold adjustment.",

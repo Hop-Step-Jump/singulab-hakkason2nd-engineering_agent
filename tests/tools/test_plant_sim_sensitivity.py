@@ -257,9 +257,10 @@ def test_yaml_matches_plant_sim_dynamics():
     assert plant.initial_cabin_co2_kg == pytest.approx(float(sim["initial_co2_storage_kg"]))
     assert plant.initial_product_water_l == pytest.approx(float(sim["initial_product_water_l"]))
     ars_goal, ogs_water, wrs_urine = _policy_action_goals(policy, plant)
-    assert ars_goal == pytest.approx(float(agents["policy"]["ars_goal"]["initial_co2_mass"]))
-    assert ogs_water == pytest.approx(float(agents["policy"]["ogs_goal"]["input_water_mass"]))
-    assert wrs_urine == pytest.approx(float(agents["policy"]["wrs_goal"]["urine_volume"]))
+    yaml_policy = (agents.get("actor") or {}).get("policy") or agents.get("policy") or {}
+    assert ars_goal == pytest.approx(float(yaml_policy["ars_goal"]["initial_co2_mass"]))
+    assert ogs_water == pytest.approx(float(yaml_policy["ogs_goal"]["input_water_mass"]))
+    assert wrs_urine == pytest.approx(float(yaml_policy["wrs_goal"]["urine_volume"]))
 
 
 def test_demand_and_nameplate_match_plant_model_probes():

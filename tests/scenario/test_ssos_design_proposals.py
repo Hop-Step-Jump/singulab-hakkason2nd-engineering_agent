@@ -42,7 +42,9 @@ def test_apply_action_profile_and_service_config():
     }
     merged = apply_design_proposals(config, proposals)
     assert merged["agents"]["policy"]["ogs_goal"]["input_water_mass"] == 12.0
+    assert merged["agents"]["actor"]["policy"]["ogs_goal"]["input_water_mass"] == 12.0
     assert merged["agents"]["policy"]["request_co2_amount"] == 30.0
+    assert merged["agents"]["actor"]["policy"]["request_co2_amount"] == 30.0
     assert merged["agents"]["policy"]["request_co2_before_ogs"] is False
     assert merged["thresholds"]["co2_storage_high_kg"] == 1600.0
     assert merged["agents"]["policy"]["ars_goal"]["initial_co2_mass"] == 1000.0
@@ -66,6 +68,15 @@ def test_apply_graph_rewire():
     merged = apply_design_proposals(config, proposals)
     assert len(merged["ssos_graph"]["rewires"]) == 1
     assert merged["ssos_graph"]["rewires"][0]["public"] == "/grey_water"
+
+
+def test_apply_graph_rewire_rejects_empty_payload():
+    proposals = {
+        "design_domain": DESIGN_DOMAIN,
+        "changes": [{"change_kind": "graph_rewire", "payload": {}}],
+    }
+    with pytest.raises(ValueError, match="non-empty"):
+        apply_design_proposals({"agents": {"policy": {}}}, proposals)
 
 
 def test_build_design_proposals_from_policy():
@@ -151,7 +162,7 @@ def test_build_design_proposals_fallback_without_goals_uses_threshold():
     assert doc["changes"]
     assert all(c["change_kind"] == "set_parameter" for c in doc["changes"])
     values = {c["payload"]["target"]: c["payload"]["value"] for c in doc["changes"]}
-    assert values["agents.policy.co2_storage_high_kg"] == pytest.approx(1.35)
+    assert values["agents.actor.policy.co2_storage_high_kg"] == pytest.approx(1.35)
     assert values["thresholds.co2_storage_high_kg"] == pytest.approx(1.35)
 
 
@@ -250,6 +261,7 @@ def test_round_trip_via_json_file(tmp_path):
     loaded = json.loads(path.read_text(encoding="utf-8"))
     merged = apply_design_proposals({"agents": {"policy": {}}}, loaded)
     assert merged["agents"]["policy"]["ogs_goal"]["input_water_mass"] == pytest.approx(9.9)
+    assert merged["agents"]["actor"]["policy"]["ogs_goal"]["input_water_mass"] == pytest.approx(9.9)
 
 
 def test_apply_action_profile_rejects_unknown_fields():
@@ -284,3 +296,50 @@ def test_apply_set_parameter_rejects_arbitrary_target():
     }
     with pytest.raises(ValueError, match="not allowed"):
         apply_design_proposals({"agents": {"policy": {}}}, proposals)
+
+
+def test_apply_set_parameter_canonical_target_dual_writes_legacy_alias():
+    proposals = {
+        "design_domain": DESIGN_DOMAIN,
+        "changes": [
+            {
+                "change_kind": "set_parameter",
+                "payload": {
+                    "target": "agents.actor.policy.co2_storage_high_kg",
+                    "value": 1.1,
+                },
+            }
+        ],
+    }
+    merged = apply_design_proposals({"agents": {}}, proposals)
+    assert merged["agents"]["actor"]["policy"]["co2_storage_high_kg"] == 1.1
+    assert merged["agents"]["policy"]["co2_storage_high_kg"] == 1.1
+
+
+def test_apply_without_legacy_policy_key_still_loads_actor_policy():
+    from scenario.runner import load_agents_config, load_scenario_config
+
+    config = load_scenario_config(
+        "ssos_eclss_loop",
+        {"agents": {"actor": {"mode": "labeled_rule_base"}}},
+    )
+    config.get("agents", {}).pop("policy", None)
+    merged = apply_design_proposals(
+        config,
+        {
+            "design_domain": DESIGN_DOMAIN,
+            "changes": [
+                {
+                    "change_kind": "action_profile",
+                    "payload": {
+                        "subsystem": "ars",
+                        "fields": {"initial_co2_mass": 2.5},
+                    },
+                }
+            ],
+        },
+    )
+    merged["agents"].pop("policy", None)
+    agents = load_agents_config("ssos_eclss_loop", merged)
+    assert agents is not None
+    assert agents["actor"]["policy"]["ars_goal"]["initial_co2_mass"] == 2.5

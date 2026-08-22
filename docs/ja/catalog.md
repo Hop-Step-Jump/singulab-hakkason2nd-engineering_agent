@@ -21,6 +21,7 @@ MkDocs サイトの全ページ一覧です。ヘッダーの言語切替で Eng
 | | [EPS 実装プラン](memo/scrubber_degradation/eps_implementation_plan.md) | EPS ブリッジ |
 | | [同種エージェントチーム](memo/agents/homogeneous_agent_team_plan.md) | チーム設計 |
 | | [SSOS ECLSS 接合プラン](memo/ssos_eclss_loop/ssos_eclss_loop_connection_plan.md) | Phase 0–7 |
+| | [事後設計エージェント](memo/ssos_eclss_loop/post_run_design_agent.md) | actor / designer 分離（実装済み） |
 | | [SSOS EPS ROS2 プラン](memo/ssos_eclss_loop/ssos_eps_ros2_connection_plan.md) | EPS（Phase 3） |
 | | [ROS2 グラフ設計調査](memo/ssos_eclss_loop/ssos_ros2_graph_design_investigation.md) | launch remap |
 | | [ECLSS 物理現象](memo/ssos_eclss_loop/ssos_eclss_physical_phenomena_overview.md) | ECLSS 物理メモ |

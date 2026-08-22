@@ -4,7 +4,7 @@ This is the design that shipped: occupants and operators shrink together when ta
 
 Survival runs only on the **`plant_sim` backend**. `mock` / `ros2` do not apply dwell or the physics floor. The ops cheatsheet / sensitivity app keep `plant_sim.survival.enabled: false`.
 
-Canonical count: `plant_sim.crew.size` in `src/scenario/ssos_eclss_loop/scenario.yaml`. When agents run, `agents.yaml` `team.count` must match. Occupants never return.
+Canonical count: `plant_sim.crew.size` in `src/scenario/ssos_eclss_loop/scenario.yaml`. When actors run, `agents.yaml` `actor.team.count` must match. Occupants never return. **Designers do not shrink** with `crew_alive` — they still propose after a wipe. See [post-run design agent](post_run_design_agent.md).
 
 ## Why the first floor was not enough
 
@@ -94,11 +94,11 @@ Keep only people the **next** metabolism interval can pay in O2 and water. **Cab
 
 ```bash
 python3 -m tools.cli run ssos_eclss_loop \
-  --backend plant_sim --agents-mode labeled_rule_base --steps 50 \
+  --backend plant_sim --actor-mode labeled_rule_base --steps 50 \
   --run-id survival-try
 ```
 
-`--agents-mode none` leaves the tanks in band so dwell is easier to see. OGS/ARS/WRS can lift the plant out of WARNING.
+`--actor-mode none` leaves the tanks in band so dwell is easier to see. OGS/ARS/WRS can lift the plant out of WARNING.
 
 ## Code
 
@@ -111,4 +111,4 @@ python3 -m tools.cli run ssos_eclss_loop \
 | `src/scenario/ssos_eclss_loop/health.py` | WARNING/CRITICAL from thresholds |
 | `tests/scenario/test_ssos_eclss_loop_survival.py` | Dwell unit tables |
 
-Plant mass-balance (not survival) is in [plant_sim_backend.md](plant_sim_backend.md).
+Plant mass-balance (not survival) is in [plant_sim_backend.md](plant_sim_backend.md). Designers are a separate team: [post-run design agent](post_run_design_agent.md).

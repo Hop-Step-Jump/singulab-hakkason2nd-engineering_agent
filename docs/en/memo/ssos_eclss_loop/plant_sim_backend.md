@@ -56,12 +56,12 @@ EclssBackend Protocol
 ```bash
 # Labeled rule-base run (no Docker)
 python3 -m tools.cli run ssos_eclss_loop \
-  --backend plant_sim --agents-mode labeled_rule_base --steps 72 \
+  --backend plant_sim --actor-mode labeled_rule_base --steps 72 \
   --run-id plant-sim-demo
 
 # Or via scenario module
 python3 -m scenario.ssos_eclss_loop.scenario_run \
-  --backend plant_sim --agents-mode labeled_rule_base --steps 72
+  --backend plant_sim --actor-mode labeled_rule_base --steps 72
 ```
 
 Set `backend.kind: plant_sim` in `scenario.yaml`, or export `SSOS_ECLSS_BACKEND=plant_sim`.
@@ -88,7 +88,7 @@ plant_sim:
     step_seconds: 1200             # observation interval (20 min)
     ars_operation_seconds: 4800    # per ARS action quantum
   crew:
-    size: 4                 # canonical occupant count; must match team.count
+    size: 4                 # canonical occupant count; must match actor.team.count
     co2_kg_day_person: 1.04        # BVAD-derived
   survival:
     enabled: true
@@ -215,7 +215,7 @@ The plant is **not** a closed system (vents, brine, unrecoverable crew water). T
 
 Full design (band dwell + physics floor, YAML tables, try commands): [Occupant survival](occupant_survival.md).
 
-`plant_sim.crew.size` is the canonical occupant count; `team.count` must match. After ops: **band dwell** then **physics floor** (O2/water next interval; no cabin-CO2 wipe; skip floor on the last step). Operators shrink with `crew_alive`. Disable with `plant_sim.survival.enabled: false`.
+`plant_sim.crew.size` is the canonical occupant count; `actor.team.count` must match. After ops: **band dwell** then **physics floor** (O2/water next interval; no cabin-CO2 wipe; skip floor on the last step). Actors shrink with `crew_alive`. Designers do not. Disable with `plant_sim.survival.enabled: false`.
 
 ## Interactive sensitivity (not the run dashboard)
 
@@ -242,7 +242,8 @@ Every plotted number is derived from YAML + `PlantModel`. Rate panels use the sa
 
 | Document / path | Content |
 | --- | --- |
-| [occupant_survival.md](occupant_survival.md) | Occupant / operator attrition (band dwell + physics floor) |
+| [occupant_survival.md](occupant_survival.md) | Occupant / actor attrition (band dwell + physics floor) |
+| [post_run_design_agent.md](post_run_design_agent.md) | Actor / designer split; designers do not shrink with crew |
 | [scenario-ssos-eclss-loop.md](../../scenario-ssos-eclss-loop.md) | Scenario spec and run commands |
 | [ssos/eclss-integration.md](../../ssos/eclss-integration.md) | `EclssBackend` implementations |
 | [api-contracts.md](../../api-contracts.md) | JSONL schemas |

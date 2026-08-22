@@ -64,7 +64,7 @@ Run your first simulation in a few minutes. Engineering Agents simulates how an 
     Use **Git Bash** for `scripts/*.sh` wrappers. Example:
 
     ```powershell
-    & "C:\Program Files\Git\bin\bash.exe" -lc "ea run ssos_eclss_loop --backend mock --agents-mode labeled_rule_base --steps 8"
+    & "C:\Program Files\Git\bin\bash.exe" -lc "ea run ssos_eclss_loop --backend mock --actor-mode labeled_rule_base --steps 8"
     ```
 
     !!! tip "Windows gotchas"
@@ -107,7 +107,7 @@ python3 -m tools.cli run scrubber_degradation --agents-mode labeled_rule_base --
 ### Mock SSOS scenario (no Docker)
 
 ```bash
-ea run ssos_eclss_loop --backend mock --agents-mode labeled_rule_base --steps 8
+ea run ssos_eclss_loop --backend mock --actor-mode labeled_rule_base --steps 8
 ea results
 ```
 
@@ -117,7 +117,7 @@ First-time setup on macOS — run on the **host** only:
 
 ```bash
 ./scripts/ssos/mac/ssos-run-detached.sh
-ea run ssos_eclss_loop --agents-mode labeled_rule_base --steps 50
+ea run ssos_eclss_loop --actor-mode labeled_rule_base --steps 50
 ea results
 ```
 
@@ -130,7 +130,7 @@ Details: [SSOS Docker setup](ssos/quickstart.md) · Full CLI reference: [CLI gui
 | Scenario | What it simulates | Backend | Typical command |
 | --- | --- | --- | --- |
 | [scrubber_degradation](scenario-scrubber-degradation.md) | CO₂ scrubber anomaly on a Python mock plant | `StationSimulator` | `ea run scrubber_degradation --agents-mode labeled_rule_base` |
-| [ssos_eclss_loop](scenario-ssos-eclss-loop.md) | Agent team operating SSOS ECLSS (ARS/OGS/WRS) | `mock` or `ros2` | `ea run ssos_eclss_loop --backend mock --agents-mode labeled_rule_base` |
+| [ssos_eclss_loop](scenario-ssos-eclss-loop.md) | Agent team operating SSOS ECLSS (ARS/OGS/WRS) | `mock` or `ros2` | `ea run ssos_eclss_loop --backend mock --actor-mode labeled_rule_base` |
 
 Both scenarios share the same agent pattern: **`none`**, **`labeled_rule_base`** (reproducible regression), or **`llm`** (Ollama or lab vLLM).
 

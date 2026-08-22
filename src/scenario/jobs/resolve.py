@@ -48,14 +48,30 @@ def resolve_run_id(
     if not agents_config:
         return str(run_id)
 
-    mode = agents_config.get("mode")
+    mode = _run_id_mode_key(agents_config)
     if mode == "labeled_rule_base":
         return str(
             output_cfg.get("run_id_labeled_rule_base", f"{scenario_name}_labeled_rule_base")
         )
     if mode == "llm":
         return str(output_cfg.get("run_id_llm", f"{scenario_name}_llm"))
+    if mode and mode not in {"none"}:
+        return f"{scenario_name}_{mode}"
     return str(run_id)
+
+
+def _run_id_mode_key(agents_config: Dict[str, Any]) -> Optional[str]:
+    if isinstance(agents_config.get("actor"), dict) or isinstance(
+        agents_config.get("design"), dict
+    ):
+        from scenario.ssos_eclss_loop.agent_config import (
+            normalize_ssos_agents_section,
+            ssos_run_id_mode_key,
+        )
+
+        return ssos_run_id_mode_key(normalize_ssos_agents_section(agents_config))
+    mode = agents_config.get("mode")
+    return str(mode) if mode is not None else None
 
 
 def resolve_run_directory(

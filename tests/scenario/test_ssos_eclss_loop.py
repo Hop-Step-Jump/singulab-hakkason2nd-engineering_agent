@@ -16,6 +16,19 @@ from scenario.ssos_eclss_loop.scenario_run import (
 from scenario.ssos_eclss_loop.loop_mock_backend import LoopMockEclssBackend
 
 
+def _ssos_agents(mode: str, *, count: int = 4, design_mode: str | None = None) -> dict:
+    agents: dict = {
+        "mode": mode,
+        "actor": {"mode": mode, "team": {"count": count, "id_prefix": "eclss_actor"}},
+    }
+    if design_mode is not None:
+        agents["design"] = {
+            "mode": design_mode,
+            "team": {"count": 4, "id_prefix": "eclss_designer"},
+        }
+    return {"agents": agents}
+
+
 def _read_jsonl(path: Path) -> list:
     if not path.exists():
         return []
@@ -97,7 +110,7 @@ def test_ssos_eclss_loop_labeled_agents_invoke_ars(tmp_path: Path):
         "ssos_eclss_loop",
         output_dir=tmp_path / "labeled",
         overrides={
-            "agents": {"mode": "labeled_rule_base", "team": {"count": 4}},
+            **_ssos_agents("labeled_rule_base"),
             "plant_sim": {"crew": {"size": 4}},
             "simulation": {"initial_o2_storage_kg": 8.0},
         },
@@ -110,16 +123,18 @@ def test_ssos_eclss_loop_labeled_agents_invoke_ars(tmp_path: Path):
     telemetry = _read_jsonl(run_dir / "telemetry.jsonl")
 
     assert summary["agents_mode"] == "labeled_rule_base"
+    assert summary["actor_mode"] == "labeled_rule_base"
+    assert summary["design_mode"] == "labeled_rule_base"
     assert "thresholds" in summary
     assert summary["thresholds"]["co2_storage_high_kg"] == pytest.approx(2.0)
     assert summary["thresholds"]["co2_storage_critical_kg"] == pytest.approx(8.0)
     assert "health_inputs" in summary
     assert summary["team_count"] == 4
     assert summary["agent_ids"] == [
-        "eclss_operator_1",
-        "eclss_operator_2",
-        "eclss_operator_3",
-        "eclss_operator_4",
+        "eclss_actor_1",
+        "eclss_actor_2",
+        "eclss_actor_3",
+        "eclss_actor_4",
     ]
     assert summary["message_count"] > 0
     assert summary["operational_command_count"] >= 1
@@ -151,7 +166,7 @@ def test_ssos_eclss_loop_labeled_policy_matches_thresholds(tmp_path: Path):
         "ssos_eclss_loop",
         output_dir=tmp_path / "policy_thresholds",
         overrides={
-            "agents": {"mode": "labeled_rule_base"},
+            **_ssos_agents("labeled_rule_base"),
             "thresholds": {"co2_storage_high_kg": 1.6, "o2_storage_low_kg": 0.43},
             "simulation": {"initial_co2_storage_kg": 1.65},
         },
@@ -166,7 +181,7 @@ def test_ssos_eclss_loop_labeled_reinvokes_ars_when_co2_reexceeds(tmp_path: Path
         "ssos_eclss_loop",
         output_dir=tmp_path / "labeled_rearm",
         overrides={
-            "agents": {"mode": "labeled_rule_base"},
+            **_ssos_agents("labeled_rule_base"),
             "simulation": {"initial_o2_storage_kg": 8.0},
         },
         recreate_output=True,
@@ -191,7 +206,7 @@ def test_ssos_eclss_loop_provenance_includes_operational_records(tmp_path: Path)
         "ssos_eclss_loop",
         output_dir=tmp_path / "labeled_prov",
         overrides={
-            "agents": {"mode": "labeled_rule_base"},
+            **_ssos_agents("labeled_rule_base"),
             "simulation": {"initial_o2_storage_kg": 8.0},
         },
         recreate_output=True,
@@ -212,7 +227,7 @@ def test_ssos_eclss_loop_apply_proposals(tmp_path: Path):
     first = run_scenario(
         "ssos_eclss_loop",
         output_dir=tmp_path / "first",
-        overrides={"agents": {"mode": "labeled_rule_base"}},
+        overrides=_ssos_agents("labeled_rule_base"),
         recreate_output=True,
     )
     proposals_path = first / "design_proposals.json"
@@ -222,7 +237,7 @@ def test_ssos_eclss_loop_apply_proposals(tmp_path: Path):
 
     second = SsosEclssLoopScenario().run(
         output_dir=tmp_path / "second",
-        overrides={"agents": {"mode": "labeled_rule_base"}},
+        overrides=_ssos_agents("labeled_rule_base"),
         apply_proposals_path=proposals_path,
     )
     summary = json.loads((second / "summary.json").read_text(encoding="utf-8"))
@@ -237,10 +252,11 @@ def test_ssos_eclss_loop_apply_proposals(tmp_path: Path):
     effective_agents = yaml.safe_load((second / "agents_config.yaml").read_text(encoding="utf-8"))
     effective_scenario = yaml.safe_load((second / "scenario_config.yaml").read_text(encoding="utf-8"))
     assert effective_scenario.get("agents", {}).get("mode") == "labeled_rule_base"
+    assert (effective_agents.get("actor") or {}).get("mode") == "labeled_rule_base"
 
     # At least one applied change must appear in the dumped effective agents policy.
     applied_kinds = {c["change_kind"] for c in proposals.get("changes", [])}
-    policy = effective_agents.get("policy") or {}
+    policy = (effective_agents.get("actor") or {}).get("policy") or effective_agents.get("policy") or {}
     if "action_profile" in applied_kinds:
         assert "ars_goal" in policy or "ogs_goal" in policy or "wrs_goal" in policy
     if "service_config" in applied_kinds:
@@ -257,7 +273,7 @@ def test_ssos_eclss_loop_labeled_agents_ogs_when_o2_low(tmp_path: Path):
         "ssos_eclss_loop",
         output_dir=tmp_path / "ogs",
         overrides={
-            "agents": {"mode": "labeled_rule_base"},
+            **_ssos_agents("labeled_rule_base"),
             "simulation": {"initial_o2_storage_kg": 0.42},
         },
         recreate_output=True,
@@ -317,80 +333,87 @@ def test_build_eclss_backend_unknown_raises():
         build_eclss_backend({}, kind="invalid")
 
 
+class _FakeEclssLlm:
+    def generate(self, prompt: str) -> str:
+        lower = prompt.lower()
+        if "phase: deliberation" in lower:
+            return json.dumps(
+                {
+                    "message": "CO2 storage at band edge; ARS may be warranted.",
+                    "reasoning": "co2_storage_kg telemetry elevated",
+                }
+            )
+        if "phase: action" in lower:
+            return json.dumps(
+                {
+                    "message": "LLM action rep: start ARS air_revitalisation.",
+                    "reasoning": "team consensus on high CO2 storage",
+                    "commands": [
+                        {
+                            "kind": "air_revitalisation",
+                            "payload": {
+                                "initial_co2_mass": 1.8,
+                                "initial_moisture_content": 25.0,
+                                "initial_contaminants": 5.0,
+                            },
+                        }
+                    ],
+                }
+            )
+        if "phase: post_run_proposal" in lower:
+            return json.dumps(
+                {
+                    "message": "LLM design: raise ARS CO2 mass setpoint for next run.",
+                    "reasoning": "operational intervention indicates margin gap",
+                    "changes": [
+                        {
+                            "change_kind": "action_profile",
+                            "payload": {
+                                "subsystem": "ars",
+                                "action": "air_revitalisation",
+                                "fields": {"initial_co2_mass": 2.0},
+                            },
+                        },
+                        {
+                            "change_kind": "action_profile",
+                            "payload": {
+                                "subsystem": "ogs",
+                                "action": "oxygen_generation",
+                                "fields": {"input_water_mass": 0.2},
+                            },
+                        },
+                        {
+                            "change_kind": "set_parameter",
+                            "payload": {
+                                "target": "agents.policy.co2_storage_high_kg",
+                                "value": 1.4,
+                            },
+                        },
+                    ],
+                }
+            )
+        return "{}"
+
+
 def test_ssos_eclss_loop_llm_agents_invoke_ars(tmp_path: Path, monkeypatch):
     from scenario.agents.ssos_eclss_loop_team import SsosEclssLoopTeam
+    from scenario.agents.ssos_post_run_design import PostRunDesignAgent
 
-    class FakeClient:
-        def generate(self, prompt: str) -> str:
-            lower = prompt.lower()
-            if "phase: deliberation" in lower and "eclss_operator_1" in lower:
-                return json.dumps(
-                    {
-                        "message": "CO2 storage at band edge; ARS may be warranted.",
-                        "reasoning": "co2_storage_kg telemetry elevated",
-                    }
-                )
-            if "phase: deliberation" in lower and "eclss_operator_2" in lower:
-                return json.dumps(
-                    {
-                        "message": "Agree — vent CO2 before reserve fills further.",
-                        "reasoning": "storage trend unfavorable",
-                    }
-                )
-            if "phase: deliberation" in lower and "eclss_operator_3" in lower:
-                return json.dumps(
-                    {
-                        "message": "Monitoring O2; focus ARS this step.",
-                        "reasoning": "o2 still adequate",
-                    }
-                )
-            if "phase: action" in lower:
-                return json.dumps(
-                    {
-                        "message": "LLM action rep: start ARS air_revitalisation.",
-                        "reasoning": "team consensus on high CO2 storage",
-                        "commands": [
-                            {
-                                "kind": "air_revitalisation",
-                                "payload": {
-                                    "initial_co2_mass": 1.8,
-                                    "initial_moisture_content": 25.0,
-                                    "initial_contaminants": 5.0,
-                                },
-                            }
-                        ],
-                    }
-                )
-            if "phase: post_run_proposal" in lower:
-                return json.dumps(
-                    {
-                        "message": "LLM design: raise ARS CO2 mass setpoint for next run.",
-                        "reasoning": "operational intervention indicates margin gap",
-                        "changes": [
-                            {
-                                "change_kind": "action_profile",
-                                "payload": {
-                                    "subsystem": "ars",
-                                    "action": "air_revitalisation",
-                                    "fields": {"initial_co2_mass": 2.0},
-                                },
-                            }
-                        ],
-                    }
-                )
-            return "{}"
-
-    monkeypatch.setattr(SsosEclssLoopTeam, "_build_llm_client", staticmethod(lambda _: FakeClient()))
+    monkeypatch.setattr(SsosEclssLoopTeam, "_build_llm_client", staticmethod(lambda _: _FakeEclssLlm()))
+    monkeypatch.setattr(PostRunDesignAgent, "_build_llm_client", staticmethod(lambda _: _FakeEclssLlm()))
 
     run_dir = run_scenario(
         "ssos_eclss_loop",
         output_dir=tmp_path / "llm",
         overrides={
             "simulation": {"steps": 8},
+            **_ssos_agents("llm"),
             "agents": {
-                "mode": "llm",
-                "max_actions_per_step": 1,
-                "team": {"count": 4},
+                **_ssos_agents("llm")["agents"],
+                "actor": {
+                    **_ssos_agents("llm")["agents"]["actor"],
+                    "max_actions_per_step": 1,
+                },
             },
             "plant_sim": {"crew": {"size": 4}},
         },
@@ -402,6 +425,7 @@ def test_ssos_eclss_loop_llm_agents_invoke_ars(tmp_path: Path, monkeypatch):
     design_proposals = json.loads((run_dir / "design_proposals.json").read_text(encoding="utf-8"))
 
     assert summary["agents_mode"] == "llm"
+    assert summary["design_mode"] == "llm"
     assert summary["team_count"] == 4
     assert summary["max_actions_per_step"] == 1
     assert summary["operational_command_count"] >= 1
@@ -410,20 +434,108 @@ def test_ssos_eclss_loop_llm_agents_invoke_ars(tmp_path: Path, monkeypatch):
     assert any(m.get("deliberation_phase") == "deliberation" for m in messages)
     assert any(m.get("deliberation_phase") == "action" for m in messages)
     assert design_proposals.get("decision_source") == "llm"
+    assert design_proposals.get("proposed_by", "").startswith("eclss_designer_")
     assert design_proposals.get("design_domain") == "ssos_graph"
+    assert len(design_proposals.get("changes", [])) == 3
     assert any(c.get("change_kind") == "action_profile" for c in design_proposals.get("changes", []))
+    assert any(
+        str(m.get("from_role", "")).startswith("eclss_designer_")
+        and m.get("deliberation_phase") in {"deliberation", "post_run_proposal"}
+        for m in messages
+    )
+    last_step = summary["steps"] - 1
+    assert all(
+        m.get("step") == last_step
+        for m in messages
+        if str(m.get("from_role", "")).startswith("eclss_designer_")
+    )
+    assert "deliberation_messages" not in design_proposals
+
+
+def test_ssos_eclss_loop_llm_actor_design_none_skips_proposals(tmp_path: Path, monkeypatch):
+    from scenario.agents.ssos_eclss_loop_team import SsosEclssLoopTeam
+
+    monkeypatch.setattr(SsosEclssLoopTeam, "_build_llm_client", staticmethod(lambda _: _FakeEclssLlm()))
+    run_dir = run_scenario(
+        "ssos_eclss_loop",
+        output_dir=tmp_path / "llm_actor_only",
+        overrides={
+            "simulation": {"steps": 4},
+            **_ssos_agents("llm", design_mode="none"),
+        },
+        recreate_output=True,
+    )
+    summary = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["actor_mode"] == "llm"
+    assert summary["design_mode"] == "none"
+    assert summary.get("design_proposal_count") in {None, 0}
+    assert not (run_dir / "design_proposals.json").exists()
+
+
+def test_ssos_eclss_loop_labeled_actor_llm_design(tmp_path: Path, monkeypatch):
+    from scenario.agents.ssos_post_run_design import PostRunDesignAgent
+
+    monkeypatch.setattr(PostRunDesignAgent, "_build_llm_client", staticmethod(lambda _: _FakeEclssLlm()))
+    run_dir = run_scenario(
+        "ssos_eclss_loop",
+        output_dir=tmp_path / "labeled_llm_design",
+        overrides=_ssos_agents("labeled_rule_base", design_mode="llm"),
+        recreate_output=True,
+    )
+    summary = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
+    proposals = json.loads((run_dir / "design_proposals.json").read_text(encoding="utf-8"))
+    assert summary["actor_mode"] == "labeled_rule_base"
+    assert summary["design_mode"] == "llm"
+    assert proposals.get("decision_source") == "llm"
+    assert len(proposals.get("changes", [])) == 3
+    assert proposals.get("proposed_by", "").startswith("eclss_designer_")
+    messages = _read_jsonl(run_dir / "messages.jsonl")
+    assert any(str(m.get("from_role", "")).startswith("eclss_designer_") for m in messages)
+    last_step = summary["steps"] - 1
+    assert all(
+        m.get("step") == last_step
+        for m in messages
+        if str(m.get("from_role", "")).startswith("eclss_designer_")
+    )
+
+
+def test_ssos_llm_design_parse_fail_falls_back_to_rule_changes(tmp_path: Path, monkeypatch):
+    from scenario.agents.ssos_post_run_design import PostRunDesignAgent
+
+    class _UnparseableLlm:
+        def generate(self, prompt: str) -> str:
+            return "<<<not json>>>"
+
+    monkeypatch.setattr(
+        PostRunDesignAgent, "_build_llm_client", staticmethod(lambda _: _UnparseableLlm())
+    )
+    run_dir = run_scenario(
+        "ssos_eclss_loop",
+        output_dir=tmp_path / "parse_fail",
+        overrides={
+            **_ssos_agents("none", design_mode="llm"),
+            "simulation": {"steps": 2},
+        },
+        recreate_output=True,
+    )
+    summary = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
+    proposals = json.loads((run_dir / "design_proposals.json").read_text(encoding="utf-8"))
+    assert summary["design_decision_source"] == "llm_parse_fail"
+    assert proposals["decision_source"] == "llm_parse_fail"
+    assert proposals["changes"]
+    assert "deliberation_messages" not in proposals
 
 
 def test_ssos_eclss_loop_skips_empty_design_proposals_file(tmp_path: Path, monkeypatch):
     """L8/B: do not write design_proposals.json when changes is empty."""
-    from scenario.agents.ssos_eclss_loop_team import SsosEclssLoopTeam
+    from scenario.agents.ssos_post_run_design import PostRunDesignAgent
 
     monkeypatch.setattr(
-        SsosEclssLoopTeam,
-        "propose_post_run_design",
-        lambda self, summary: {
+        PostRunDesignAgent,
+        "propose",
+        lambda self, bundle: {
             "design_domain": "ssos_graph",
-            "proposed_by": "op_1",
+            "proposed_by": "eclss_designer_1",
             "decision_source": "rule",
             "message": "",
             "changes": [],
@@ -432,7 +544,7 @@ def test_ssos_eclss_loop_skips_empty_design_proposals_file(tmp_path: Path, monke
     run_dir = run_scenario(
         "ssos_eclss_loop",
         output_dir=tmp_path / "empty_proposals",
-        overrides={"agents": {"mode": "labeled_rule_base"}},
+        overrides=_ssos_agents("labeled_rule_base"),
         recreate_output=True,
     )
     summary = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
@@ -551,7 +663,7 @@ def test_ssos_eclss_loop_plant_sim_writes_thresholds_and_metabolism(tmp_path: Pa
         output_dir=tmp_path / "plant_sim",
         overrides={
             "backend": {"kind": "plant_sim"},
-            "agents": {"mode": "labeled_rule_base"},
+            **_ssos_agents("labeled_rule_base", count=50),
             "simulation": {"steps": 3},
         },
         recreate_output=True,
@@ -601,7 +713,7 @@ def test_ssos_eclss_loop_plant_sim_writes_thresholds_and_metabolism(tmp_path: Pa
 
 
 def test_plant_sim_rejects_mismatched_team_count(tmp_path: Path):
-    with pytest.raises(ValueError, match="must match team.count"):
+    with pytest.raises(ValueError, match="must match actor.team.count"):
         run_scenario(
             "ssos_eclss_loop",
             output_dir=tmp_path / "mismatch",

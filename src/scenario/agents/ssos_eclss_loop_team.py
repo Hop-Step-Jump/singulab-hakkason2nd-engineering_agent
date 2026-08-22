@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import math
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
@@ -13,7 +12,6 @@ from core.agents.persona import (
     PersonaAgent,
     TeamConfig,
     build_personas,
-    eclss_design_proposal_contract,
     eclss_operational_action_contract,
     load_team,
     message_contract,
@@ -28,12 +26,6 @@ from scenario.agents.eclss_loop_types import (
     EclssLoopObservation,
     EclssOperationalCommand,
     StepEclssOutcome,
-)
-from scenario.ssos_eclss_loop.design_proposals import (
-    DESIGN_DOMAIN,
-    SSOS_CHANGE_KINDS,
-    ACTION_PROFILE_FIELDS_BY_SUBSYSTEM,
-    build_design_proposals_from_run,
 )
 from scenario.ssos_eclss_loop.health import (
     DEFAULT_CO2_STORAGE_CRITICAL_KG,
@@ -174,29 +166,6 @@ class SsosEclssLoopTeam(Team):
             if event is not None:
                 events.append(event)
         return events
-
-    def propose_post_run_design(self, summary: Dict[str, Any]) -> Dict[str, Any]:
-        baseline_graph = dict(self.config.get("ssos_graph") or {})
-        if not self._active_ids:
-            return {
-                "design_domain": DESIGN_DOMAIN,
-                "proposed_by": "",
-                "decision_source": "llm" if self.llm_mode else "rule",
-                "message": "",
-                "changes": [],
-                "baseline_graph": baseline_graph,
-            }
-        steps = int(summary.get("steps", 0))
-        rep = self._action_rep_id(steps - 1 if steps > 0 else 0)
-        if self.llm_mode:
-            return self._llm_post_run_design_proposal(summary, baseline_graph, rep)
-        return build_design_proposals_from_run(
-            proposed_by=rep,
-            decision_source="rule",
-            policy=self.policy,
-            summary=summary,
-            baseline_graph=baseline_graph or None,
-        )
 
     def _run_step_llm(self, obs: EclssLoopObservation) -> StepEclssOutcome:
         outcome = StepEclssOutcome()
@@ -601,113 +570,6 @@ class SsosEclssLoopTeam(Team):
         )
         return [llm_msg], commands
 
-    def _llm_post_run_design_proposal(
-        self,
-        summary: Dict[str, Any],
-        baseline_graph: Dict[str, Any],
-        rep: str,
-    ) -> Dict[str, Any]:
-        situation = build_llm_post_run_situation(
-            summary,
-            self.memory_store.discourse.recent(),
-            baseline_graph,
-        )
-        contract = eclss_design_proposal_contract()
-        agent = self.agents[rep]
-        ctx = agent.build_context(
-            step=int(summary.get("steps", 0)),
-            phase=DeliberationPhase.POST_RUN,
-            situation=situation,
-            step_discourse=[],
-            team_discourse=self.memory_store.discourse.recent(),
-        )
-        parsed = agent.deliberate(
-            ctx,
-            contract,
-            PersonaAgent.phase_hint(DeliberationPhase.POST_RUN),
-            ("message", "reasoning", "changes"),
-        )
-        if parsed is None:
-            return {
-                "design_domain": DESIGN_DOMAIN,
-                "proposed_by": rep,
-                "decision_source": "llm_parse_fail",
-                "message": "",
-                "reasoning": "LLM response could not be parsed.",
-                "changes": [],
-                "baseline_graph": baseline_graph,
-                "parse_notes": [],
-            }
-
-        changes, parse_notes = self._parse_llm_design_proposals(parsed.data.get("changes", []))
-        return {
-            "design_domain": DESIGN_DOMAIN,
-            "proposed_by": rep,
-            "decision_source": "llm",
-            "message": str(parsed.data.get("message", "")),
-            "reasoning": str(parsed.data.get("reasoning", "")),
-            "changes": changes,
-            "baseline_graph": baseline_graph,
-            "parse_status": parsed.status,
-            "parse_error": parsed.error,
-            "parse_notes": parse_notes,
-            "raw_response_excerpt": parsed.raw_excerpt,
-        }
-
-    def _parse_llm_design_proposals(
-        self,
-        raw_changes: Any,
-    ) -> Tuple[List[Dict[str, Any]], List[str]]:
-        if not isinstance(raw_changes, list):
-            return [], ["changes is not a list"]
-        accepted: List[Dict[str, Any]] = []
-        notes: List[str] = []
-        for item in raw_changes:
-            if not isinstance(item, dict):
-                notes.append("change item is not an object")
-                continue
-            change_kind = str(item.get("change_kind", "")).strip()
-            payload = item.get("payload", {})
-            if not isinstance(payload, dict):
-                payload = {}
-            if change_kind not in SSOS_CHANGE_KINDS:
-                notes.append(f"unsupported change_kind: {change_kind}")
-                continue
-            if self._validate_ssos_proposal_change(change_kind, payload) is None:
-                notes.append(f"invalid payload for {change_kind}")
-                continue
-            accepted.append({"change_kind": change_kind, "payload": payload})
-        return accepted, notes
-
-    def _validate_ssos_proposal_change(
-        self,
-        change_kind: str,
-        payload: Dict[str, Any],
-    ) -> Optional[Dict[str, Any]]:
-        if change_kind == "action_profile":
-            subsystem = str(payload.get("subsystem", "")).lower()
-            fields = payload.get("fields")
-            if subsystem not in ACTION_PROFILE_FIELDS_BY_SUBSYSTEM:
-                return None
-            if not isinstance(fields, dict) or not fields:
-                return None
-            allowed = ACTION_PROFILE_FIELDS_BY_SUBSYSTEM[subsystem]
-            if any(key not in allowed for key in fields):
-                return None
-            return payload
-        if change_kind == "service_config":
-            service = str(payload.get("service", "")).lower()
-            if service not in {"request_co2", "request_o2"}:
-                return None
-            return payload
-        if change_kind == "set_parameter":
-            if not str(payload.get("target", "")).strip():
-                return None
-            return payload
-        if change_kind == "graph_rewire":
-            return payload if payload else None
-        return None
-
     def _parse_llm_operational_command(
         self,
         item: Any,
@@ -894,31 +756,3 @@ def build_llm_situation(obs: EclssLoopObservation) -> str:
     )
 
 
-def build_llm_post_run_situation(
-    summary: Dict[str, Any],
-    discourse: List[AgentMessage],
-    baseline_graph: Dict[str, Any],
-) -> str:
-    telemetry_summary = (
-        f"steps={summary.get('steps')}, peak_co2_storage_kg={summary.get('peak_co2_storage_kg')}, "
-        f"min_o2_storage_kg={summary.get('min_o2_storage_kg')}, "
-        f"final_co2_storage_kg={summary.get('final_co2_storage_kg')}, "
-        f"final_o2_storage_kg={summary.get('final_o2_storage_kg')}, "
-        f"operational_command_count={summary.get('operational_command_count')}, "
-        f"ars_invoked_step={summary.get('ars_invoked_step')}, "
-        f"ogs_invoked_step={summary.get('ogs_invoked_step')}, "
-        f"co2_requested_step={summary.get('co2_requested_step')}"
-    )
-    final_health = summary.get("final_health") or {}
-    world_state = json.dumps(final_health, ensure_ascii=False)
-    discourse_lines = "\n".join(
-        f"- {msg.from_role}: {msg.message}" for msg in discourse[-8:]
-    ) or "(none)"
-    graph = json.dumps(baseline_graph, ensure_ascii=False)
-    return (
-        "Post-run SSOS graph design review. Simulation complete.\n\n"
-        f"### Telemetry\n{telemetry_summary}\n\n"
-        f"### World state\n{world_state}\n\n"
-        f"### Team discourse (recent)\n{discourse_lines}\n\n"
-        f"Baseline ssos_graph at run end: {graph}"
-    )

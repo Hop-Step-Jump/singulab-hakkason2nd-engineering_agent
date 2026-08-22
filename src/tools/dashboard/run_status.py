@@ -404,6 +404,8 @@ def extract_operator_step(
     return {
         "step": step,
         "agents_mode": (summary or {}).get("agents_mode"),
+        "actor_mode": (summary or {}).get("actor_mode"),
+        "design_mode": (summary or {}).get("design_mode"),
         "messages": step_messages,
         "operations": ops,
     }

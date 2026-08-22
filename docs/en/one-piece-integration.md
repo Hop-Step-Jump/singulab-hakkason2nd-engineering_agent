@@ -48,6 +48,10 @@ design_state.jsonl ┘
 summary.json
 ```
 
+### ssos_eclss_loop
+
+`SsosEclssLoopScenario.run()` exports operational provenance when `agents.actor.mode` is `labeled_rule_base` or `llm`. `/eclss/events/operational_applied` becomes `record_type: operational`. Post-run `design_proposals.json` comes from `PostRunDesignAgent` (not `team.propose_post_run_design`).
+
 ---
 
 ## Records exported today

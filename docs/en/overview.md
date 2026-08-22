@@ -89,7 +89,7 @@ In [`ssos_eclss_loop`](scenario-ssos-eclss-loop.md):
 
 ## Why LLM (vs rule-based)
 
-Both scenarios use `agents.mode`: `none` / `labeled_rule_base` / `llm`. **Homogeneous N agents + representative action** is shared (scrubber: `engineer_*`, ssos: `eclss_operator_*`).
+Both scenarios use `none` / `labeled_rule_base` / `llm`. Scrubber keeps a flat `agents.mode`. ssos splits **actor** (`agents.actor.mode`) and **design** (`agents.design.mode`; omitted inherits actor). Shared pattern: homogeneous N + representative action (scrubber: `engineer_*`, ssos actors: `eclss_actor_*`, ssos designers: `eclss_designer_*`).
 
 | | `labeled_rule_base` | `llm` |
 | --- | --- | --- |
@@ -162,9 +162,10 @@ Spec: [scenario-ssos-eclss-loop.md](scenario-ssos-eclss-loop.md).
 | Scenario | ID prefix | Default count | Representative action |
 | --- | --- | --- | --- |
 | scrubber | `engineer` | 4 | `engineer_{(step-1) % N}` |
-| ssos | `eclss_operator` | 3 | `eclss_operator_{step % N}` (0-based steps) |
+| ssos actors | `eclss_actor` | 50 | `eclss_actor_{step % N}` (0-based steps) |
+| ssos designers | `eclss_designer` | 4 | one representative after the run (`changes`, no count cap) |
 
-Each step: all agents discuss (llm) or rules emit diagnostics (labeled). **Post-run design** is output by the representative at the final step to `design_proposals.json`.
+Each step: all actors discuss (llm) or rules emit diagnostics (labeled). **Post-run design** on ssos is a separate designer team writing `design_proposals.json`. Design: [post-run design agent](memo/ssos_eclss_loop/post_run_design_agent.md).
 
 ---
 
@@ -413,9 +414,9 @@ To use a different model or run name, change `llm.model` in `agents.yaml` or ove
 #### mock (host, no ROS2)
 
 ```bash
-python -m scenario.ssos_eclss_loop.scenario_run --backend mock --agents-mode none
-python -m scenario.ssos_eclss_loop.scenario_run --backend mock --agents-mode labeled_rule_base
-python -m scenario.ssos_eclss_loop.scenario_run --backend mock --agents-mode llm
+python -m scenario.ssos_eclss_loop.scenario_run --backend mock --actor-mode none
+python -m scenario.ssos_eclss_loop.scenario_run --backend mock --actor-mode labeled_rule_base
+python -m scenario.ssos_eclss_loop.scenario_run --backend mock --actor-mode llm
 ```
 
 Example output: `src/experiments/results/ssos_eclss_loop_labeled_rule_base/`
@@ -423,7 +424,7 @@ Example output: `src/experiments/results/ssos_eclss_loop_labeled_rule_base/`
 PowerShell equivalent:
 
 ```powershell
-python -m scenario.ssos_eclss_loop.scenario_run --backend mock --agents-mode labeled_rule_base --steps 8
+python -m scenario.ssos_eclss_loop.scenario_run --backend mock --actor-mode labeled_rule_base --steps 8
 ```
 
 #### ros2 (inside SSOS Docker)
@@ -434,16 +435,16 @@ python -m scenario.ssos_eclss_loop.scenario_run --backend mock --agents-mode lab
 # Inside container: bash /root/ssos-eclss-headless.sh
 
 # Terminal 2: host repo root
-./scripts/run_ssos_eclss_loop.sh --agents-mode labeled_rule_base
-./scripts/run_ssos_eclss_loop.sh --agents-mode llm
+./scripts/run_ssos_eclss_loop.sh --actor-mode labeled_rule_base
+./scripts/run_ssos_eclss_loop.sh --actor-mode llm
 ```
 
-Inside container: `ea-loop --agents-mode labeled_rule_base` (requires synced `src/`).
+Inside container: `ea-loop --actor-mode labeled_rule_base` (requires synced `src/`).
 
 Apply prior run design proposals:
 
 ```bash
-python -m scenario.ssos_eclss_loop.scenario_run --backend mock --agents-mode llm \
+python -m scenario.ssos_eclss_loop.scenario_run --backend mock --actor-mode llm \
   --apply-proposals src/experiments/results/ssos_eclss_loop_llm/design_proposals.json
 ```
 
