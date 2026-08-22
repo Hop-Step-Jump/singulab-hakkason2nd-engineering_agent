@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, fields
-from typing import Dict
+from typing import Dict, List
 
 from environment.ssos.eclss.plant_sim.config import PlantSimConfig
 from environment.ssos.eclss.plant_sim.stoichiometry import (
@@ -86,6 +86,13 @@ class PlantState:
     total_product_water_delivered_l: float = 0.0
     total_external_grey_water_submitted_l: float = 0.0
 
+    # occupant survival (crew_size is the initial roster; this is the live count)
+    crew_alive: int = 0
+    crew_lost_total: int = 0
+    crew_lost_o2: int = 0
+    crew_lost_water: int = 0
+    crew_lost_co2: int = 0
+
     def copy(self) -> "PlantState":
         return PlantState(**{f.name: getattr(self, f.name) for f in fields(self)})
 
@@ -114,16 +121,83 @@ class PlantModel:
             product_water_l=c.initial_product_water_l,
             urine_buffer_l=c.initial_urine_buffer_l,
             grey_water_l=c.initial_grey_water_l,
+            crew_alive=c.crew_size,
         )
+        self._last_survival: Dict[str, object] = {
+            "lost_this_step": 0,
+            "limiting": [],
+        }
         self._check_invariants()
 
     # ------------------------------------------------------------------ #
     # crew metabolism (advance one observation interval)
     # ------------------------------------------------------------------ #
+    def metabolic_headcount(self) -> int:
+        """People whose metabolism applies on the next ``advance_step``."""
+        if self.config.survival_enabled:
+            return int(self.state.crew_alive)
+        return int(self.config.crew_size)
+
+    def per_person_o2_demand_kg(self) -> float:
+        c = self.config
+        return per_interval(c.o2_kg_day_person, c.step_seconds) * c.activity_factor
+
+    def per_person_water_demand_l(self) -> float:
+        c = self.config
+        return water_kg_to_l(
+            per_interval(c.potable_water_kg_day_person, c.step_seconds) * c.activity_factor
+        )
+
+    def per_person_co2_generated_kg(self) -> float:
+        c = self.config
+        return per_interval(c.co2_kg_day_person, c.step_seconds) * c.activity_factor
+
+    def apply_capacity_drop(self) -> Dict[str, object]:
+        """Physics floor: keep only people the next interval's O2/water can pay.
+
+        Called after band-dwell. Cabin CO2 does not wipe crew here (scenario dwell).
+        No-op when survival is disabled. Occupants never return.
+        """
+        c = self.config
+        s = self.state
+        if not c.survival_enabled:
+            self._last_survival = {"lost_this_step": 0, "limiting": []}
+            return dict(self._last_survival)
+
+        current = int(s.crew_alive)
+        o2_pp = self.per_person_o2_demand_kg()
+        water_pp = self.per_person_water_demand_l()
+        if o2_pp > 0.0:
+            o2_cap = int(math.floor(s.available_o2_kg / o2_pp + 0.0))
+        else:
+            o2_cap = current
+        if water_pp > 0.0:
+            water_cap = int(math.floor(s.product_water_l / water_pp + 0.0))
+        else:
+            water_cap = current
+        co2_cap = current  # CO2 losses are scenario dwell only
+        supported = min(current, max(0, o2_cap), max(0, water_cap), max(0, co2_cap))
+        lost = current - supported
+        limiting: List[str] = []
+        if lost > 0:
+            if o2_cap < current:
+                limiting.append("o2")
+            if water_cap < current:
+                limiting.append("water")
+            # One headcount, one cause: O2 wins when both inventories bind.
+            if o2_cap < current:
+                s.crew_lost_o2 += lost
+            elif water_cap < current:
+                s.crew_lost_water += lost
+        s.crew_alive = supported
+        s.crew_lost_total += lost
+        self._last_survival = {"lost_this_step": lost, "limiting": limiting}
+        return dict(self._last_survival)
+
     def advance_step(self) -> Dict[str, float]:
         c = self.config
         s = self.state
-        factor = c.crew_size * c.activity_factor
+        factor = self.metabolic_headcount() * c.activity_factor
 
         co2_generated = per_interval(c.co2_kg_day_person, c.step_seconds) * factor
         o2_demand = per_interval(c.o2_kg_day_person, c.step_seconds) * factor

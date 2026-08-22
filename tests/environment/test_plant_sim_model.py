@@ -49,6 +49,86 @@ def test_invalid_config_rejected(overrides):
         PlantSimConfig(**overrides)
 
 
+def test_from_scenario_config_requires_crew_size():
+    with pytest.raises(PlantConfigError, match="plant_sim.crew.size"):
+        PlantSimConfig.from_scenario_config({"simulation": {"initial_o2_storage_kg": 1.0}})
+
+
+def test_capacity_drop_o2_floor_and_no_revival():
+    m = _model(
+        crew_size=4,
+        survival_enabled=True,
+        initial_o2_kg=0.03,
+        initial_product_water_l=100.0,
+        initial_cabin_co2_kg=0.1,
+        cabin_co2_critical_kg=2.2,
+    )
+    per = m.per_person_o2_demand_kg()
+    expected = int(0.03 // per)
+    result = m.apply_capacity_drop()
+    assert m.state.crew_alive == expected
+    assert result["lost_this_step"] == 4 - expected
+    assert "o2" in result["limiting"]
+    m.state.available_o2_kg = 10.0
+    m.apply_capacity_drop()
+    assert m.state.crew_alive == expected
+
+
+def test_capacity_drop_co2_critical_does_not_cut_crew():
+    m = _model(
+        crew_size=4,
+        survival_enabled=True,
+        initial_o2_kg=10.0,
+        initial_product_water_l=100.0,
+        initial_cabin_co2_kg=2.2,
+        cabin_co2_critical_kg=2.2,
+    )
+    result = m.apply_capacity_drop()
+    assert m.state.crew_alive == 4
+    assert result["lost_this_step"] == 0
+    assert "co2" not in result["limiting"]
+
+
+def test_capacity_drop_attributes_lost_to_o2_when_both_bind():
+    m = _model(
+        crew_size=4,
+        survival_enabled=True,
+        initial_o2_kg=10.0,
+        initial_product_water_l=100.0,
+    )
+    o2_pp = m.per_person_o2_demand_kg()
+    water_pp = m.per_person_water_demand_l()
+    m.state.available_o2_kg = 2 * o2_pp
+    m.state.product_water_l = 1 * water_pp
+    result = m.apply_capacity_drop()
+    assert m.state.crew_alive == 1
+    assert result["lost_this_step"] == 3
+    assert result["limiting"] == ["o2", "water"]
+    assert m.state.crew_lost_o2 == 3
+    assert m.state.crew_lost_water == 0
+    assert m.state.crew_lost_total == 3
+
+
+def test_metabolism_scales_with_crew_alive_when_survival_enabled():
+    full = _model(crew_size=4, survival_enabled=True, initial_o2_kg=10.0)
+    half = _model(crew_size=4, survival_enabled=True, initial_o2_kg=10.0)
+    half.state.crew_alive = 2
+    full.advance_step()
+    half.advance_step()
+    assert half.state.total_co2_generated_kg == pytest.approx(
+        0.5 * full.state.total_co2_generated_kg, **APPROX
+    )
+
+
+def test_zero_crew_has_zero_metabolism():
+    m = _model(crew_size=4, survival_enabled=True)
+    m.state.crew_alive = 0
+    before = m.state.copy()
+    metab = m.advance_step()
+    assert metab["co2_generated_kg"] == pytest.approx(0.0, abs=1e-12)
+    assert m.state.cabin_co2_kg == pytest.approx(before.cabin_co2_kg, **APPROX)
+
+
 def test_from_scenario_config_merges_and_defaults():
     cfg = PlantSimConfig.from_scenario_config(
         {

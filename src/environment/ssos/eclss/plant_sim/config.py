@@ -62,6 +62,10 @@ class PlantSimConfig:
     initial_urine_buffer_l: float = 0.0
     initial_grey_water_l: float = 0.0
 
+    # --- survival (off for library/unit tests; scenario YAML turns it on) ---
+    survival_enabled: bool = False
+    cabin_co2_critical_kg: float = 2.2
+
     # --- diagnostics ---
     invariant_tolerance: float = 1.0e-9
     clamp_epsilon: float = 1.0e-12
@@ -95,6 +99,7 @@ class PlantSimConfig:
         # crew size / activity
         req(isinstance(self.crew_size, int) and self.crew_size >= 0, "crew_size must be int >= 0")
         req(self.activity_factor >= 0, "activity_factor must be >= 0")
+        req(self.cabin_co2_critical_kg >= 0, "cabin_co2_critical_kg must be >= 0")
 
         # per-person rates non-negative
         for name in (
@@ -150,7 +155,9 @@ class PlantSimConfig:
     def from_scenario_config(cls, config: Mapping[str, Any]) -> "PlantSimConfig":
         """Build a config from a nested scenario dict (see DESIGN_PLAN v2 §5.2).
 
-        Missing keys fall back to class defaults. Unknown keys are ignored.
+        Missing keys fall back to class defaults except ``plant_sim.crew.size``,
+        which is required whenever a scenario mapping is supplied. Unknown keys
+        are ignored.
         """
         base = cls()
         if not config:
@@ -164,7 +171,15 @@ class PlantSimConfig:
         ogs = dict(ps.get("ogs", {}) or {})
         sab = dict(ps.get("sabatier", {}) or {})
         wrs = dict(ps.get("wrs", {}) or {})
+        survival = dict(ps.get("survival", {}) or {})
         diag = dict(ps.get("diagnostics", {}) or {})
+        thresholds = dict(config.get("thresholds", {}) or {})
+
+        if "size" not in crew:
+            raise PlantConfigError(
+                "plant_sim.crew.size is required in scenario YAML "
+                "(do not fall back to the Python default)"
+            )
 
         def pick(source: Mapping[str, Any], key: str, attr: str) -> Any:
             return source.get(key, getattr(base, attr))
@@ -204,6 +219,10 @@ class PlantSimConfig:
             initial_cabin_co2_kg=pick(sim, "initial_co2_storage_kg", "initial_cabin_co2_kg"),
             initial_o2_kg=pick(sim, "initial_o2_storage_kg", "initial_o2_kg"),
             initial_product_water_l=pick(sim, "initial_product_water_l", "initial_product_water_l"),
+            survival_enabled=bool(pick(survival, "enabled", "survival_enabled")),
+            cabin_co2_critical_kg=pick(
+                thresholds, "co2_storage_critical_kg", "cabin_co2_critical_kg"
+            ),
             invariant_tolerance=pick(diag, "invariant_tolerance", "invariant_tolerance"),
             clamp_epsilon=pick(diag, "clamp_epsilon", "clamp_epsilon"),
         )

@@ -33,6 +33,11 @@ from scenario.ssos_eclss_loop.health import (
     compute_eclss_storage_health,
     health_inputs_note,
 )
+from scenario.ssos_eclss_loop.survival import (
+    SurvivalDwellPolicy,
+    SurvivalStreaks,
+    map_physics_limiting,
+)
 from scenario.ssos_eclss_loop.loop_mock_backend import LoopMockEclssBackend
 from scenario.ssos_eclss_loop.design_proposals import (
     apply_design_proposals,
@@ -164,6 +169,133 @@ def build_eclss_backend(config: Dict[str, Any], kind: Optional[str] = None) -> E
     )
 
 
+def bind_plant_sim_crew_and_team(
+    config: Dict[str, Any],
+    agents_config: Optional[Dict[str, Any]],
+    backend_kind: str,
+) -> None:
+    """Require YAML occupant count for plant_sim; keep operators in lock-step."""
+    if backend_kind != "plant_sim":
+        return
+    crew = ((config.get("plant_sim") or {}).get("crew") or {})
+    if "size" not in crew:
+        raise ValueError(
+            "plant_sim.crew.size is required in scenario YAML when backend.kind is plant_sim"
+        )
+    crew_size = int(crew["size"])
+    if agents_config is None:
+        return
+    team = agents_config.setdefault("team", {})
+    if "count" not in team:
+        team["count"] = crew_size
+        return
+    team_count = int(team["count"])
+    if team_count != crew_size:
+        raise ValueError(
+            f"plant_sim.crew.size ({crew_size}) must match team.count ({team_count}); "
+            "occupants and operators are the same people"
+        )
+
+
+def _plant_sim_topic(snap: Optional[EclssTelemetrySnapshot]) -> Optional[Dict[str, Any]]:
+    if snap is None or not snap.raw_topics:
+        return None
+    topic = snap.raw_topics.get("plant_sim")
+    return topic if isinstance(topic, dict) else None
+
+
+def _accumulate_storage_peaks(
+    snap: EclssTelemetrySnapshot,
+    peak_co2: Optional[float],
+    min_o2: Optional[float],
+) -> tuple[Optional[float], Optional[float]]:
+    if snap.co2_storage_kg is not None:
+        peak_co2 = (
+            snap.co2_storage_kg if peak_co2 is None else max(peak_co2, snap.co2_storage_kg)
+        )
+    if snap.o2_storage_kg is not None:
+        min_o2 = snap.o2_storage_kg if min_o2 is None else min(min_o2, snap.o2_storage_kg)
+    return peak_co2, min_o2
+
+
+def _append_post_ops(
+    log: EventLog,
+    step: int,
+    snap: EclssTelemetrySnapshot,
+    health: Dict[str, Any],
+) -> None:
+    log.append("telemetry", {"step": step, "post_ops": True, **snap.to_dict()})
+    log.append("health_metrics", {**health, "post_ops": True})
+
+
+def _apply_survival_after_ops(
+    *,
+    backend: EclssBackend,
+    team: Optional[SsosEclssLoopTeam],
+    step: int,
+    log: EventLog,
+    thresholds: Dict[str, Any],
+    policy: SurvivalDwellPolicy,
+    streaks: SurvivalStreaks,
+    physics_floor: bool,
+) -> tuple[Optional[EclssTelemetrySnapshot], SurvivalStreaks]:
+    apply = getattr(backend, "apply_capacity_drop", None)
+    set_alive = getattr(backend, "set_crew_alive", None)
+    if not callable(apply) or not policy.enabled:
+        return None, streaks
+    snap = backend.poll_telemetry()
+    topic = _plant_sim_topic(snap) or {}
+    alive = int(topic.get("crew_alive", 0))
+    limiting: list[str] = []
+    by_cause: Dict[str, int] = {}
+    dwell_lost = 0
+    if policy.enabled:
+        health = compute_eclss_storage_health(step, snap, thresholds)
+        new_alive, dwell_lost, limiting, streaks, by_cause = policy.apply_dwell(
+            alive, health, streaks
+        )
+        if callable(set_alive):
+            set_alive(new_alive, limiting=limiting)
+        alive = new_alive
+    # Look-ahead floor is for the next metabolism interval; skip when none remains.
+    if physics_floor:
+        result = apply()
+        physics_lost = int(result.get("lost_this_step") or 0)
+        physics_limiting = map_physics_limiting(list(result.get("limiting") or []))
+    else:
+        physics_lost = 0
+        physics_limiting = []
+    remaining_physics = physics_lost
+    for cause in ("co2_physics", "o2_physics", "water_physics"):
+        if remaining_physics <= 0:
+            break
+        if cause not in physics_limiting:
+            continue
+        by_cause[cause] = remaining_physics
+        remaining_physics = 0
+    limiting = limiting + [item for item in physics_limiting if item not in limiting]
+    lost = dwell_lost + physics_lost
+    snap = backend.poll_telemetry()
+    topic = _plant_sim_topic(snap) or {}
+    lost_ids: list[str] = []
+    if team is not None:
+        lost_ids = team.set_crew_alive(int(topic.get("crew_alive", 0)))
+    if lost > 0:
+        log.append(
+            "events",
+            {
+                "step": step,
+                "kind": "/eclss/events/crew_lost",
+                "lost": lost,
+                "remaining": topic.get("crew_alive"),
+                "limiting": limiting,
+                "crew_lost_by_cause": dict(by_cause),
+                "agent_ids": lost_ids,
+            },
+        )
+    return snap, streaks
+
+
 class SsosEclssLoopScenario(Scenario):
     @property
     def name(self) -> str:
@@ -216,10 +348,11 @@ class SsosEclssLoopScenario(Scenario):
         agents_config = load_agents_config(self.name, config)
         if agents_config:
             agents_config = merge_labeled_policy_from_thresholds(agents_config, thresholds)
+        backend_kind = resolve_backend_kind(config, overrides)
+        bind_plant_sim_crew_and_team(config, agents_config, backend_kind)
         sim_cfg = config.get("simulation", {})
         steps = int(sim_cfg.get("steps", 8))
         output_cfg = config.get("output", {})
-        backend_kind = resolve_backend_kind(config, overrides)
         # Persist the resolved kind (CLI / SSOS_ECLSS_BACKEND may differ from YAML).
         backend_section = config.get("backend")
         if not isinstance(backend_section, dict):
@@ -271,10 +404,13 @@ class SsosEclssLoopScenario(Scenario):
         last_health: Optional[Dict[str, Any]] = None
         peak_co2: Optional[float] = None
         min_o2: Optional[float] = None
+        dwell_policy = SurvivalDwellPolicy.from_config(config.get("plant_sim") or {})
+        dwell_streaks = SurvivalStreaks()
 
         try:
             # 0-based steps: step 0 observes configured initial state; advance before 1..steps-1.
             for step in range(steps):
+                commands_this_step = False
                 if step > 0 and hasattr(backend, "advance_step"):
                     backend.advance_step()
 
@@ -290,18 +426,7 @@ class SsosEclssLoopScenario(Scenario):
                 if backend_kind == "ros2":
                     _assert_ros2_storage_telemetry(step, snap)
                 last_snap = snap
-                if snap.co2_storage_kg is not None:
-                    peak_co2 = (
-                        snap.co2_storage_kg
-                        if peak_co2 is None
-                        else max(peak_co2, snap.co2_storage_kg)
-                    )
-                if snap.o2_storage_kg is not None:
-                    min_o2 = (
-                        snap.o2_storage_kg
-                        if min_o2 is None
-                        else min(min_o2, snap.o2_storage_kg)
-                    )
+                peak_co2, min_o2 = _accumulate_storage_peaks(snap, peak_co2, min_o2)
 
                 health = compute_eclss_storage_health(step, snap, thresholds)
                 last_health = health
@@ -337,28 +462,38 @@ class SsosEclssLoopScenario(Scenario):
                         elif cmd_kind == "request_co2" and co2_requested_step is None:
                             co2_requested_step = step
 
-                    # L5: refresh final telemetry/health after ops so summary reflects last actions.
+                    # L5: refresh after ops; the post_ops JSONL row is written once below
+                    # (after survival on plant_sim, so ops + attrition share one row).
                     if outcome.commands:
+                        commands_this_step = True
                         snap = backend.poll_telemetry()
                         if backend_kind == "ros2":
                             _assert_ros2_storage_telemetry(step, snap)
                         last_snap = snap
-                        if snap.co2_storage_kg is not None:
-                            peak_co2 = (
-                                snap.co2_storage_kg
-                                if peak_co2 is None
-                                else max(peak_co2, snap.co2_storage_kg)
-                            )
-                        if snap.o2_storage_kg is not None:
-                            min_o2 = (
-                                snap.o2_storage_kg
-                                if min_o2 is None
-                                else min(min_o2, snap.o2_storage_kg)
-                            )
+                        peak_co2, min_o2 = _accumulate_storage_peaks(snap, peak_co2, min_o2)
                         health = compute_eclss_storage_health(step, snap, thresholds)
                         last_health = health
-                        log.append("telemetry", {"step": step, "post_ops": True, **snap.to_dict()})
-                        log.append("health_metrics", {**health, "post_ops": True})
+
+                survival_snap, dwell_streaks = _apply_survival_after_ops(
+                    backend=backend,
+                    team=team,
+                    step=step,
+                    log=log,
+                    thresholds=thresholds,
+                    policy=dwell_policy,
+                    streaks=dwell_streaks,
+                    physics_floor=step + 1 < steps,
+                )
+                if survival_snap is not None:
+                    last_snap = survival_snap
+                    peak_co2, min_o2 = _accumulate_storage_peaks(
+                        survival_snap, peak_co2, min_o2
+                    )
+                    health = compute_eclss_storage_health(step, survival_snap, thresholds)
+                    last_health = health
+                    _append_post_ops(log, step, survival_snap, health)
+                elif commands_this_step and last_snap is not None and last_health is not None:
+                    _append_post_ops(log, step, last_snap, last_health)
 
         finally:
             clear_scheduled_subsystem_failures(backend, failure_schedule)
@@ -377,6 +512,20 @@ class SsosEclssLoopScenario(Scenario):
             "health_inputs": health_inputs_note(),
             **config_paths,
         }
+        plant_topic = _plant_sim_topic(last_snap)
+        if plant_topic is not None and "crew_alive" in plant_topic:
+            summary["crew_initial"] = plant_topic.get("crew_initial")
+            summary["crew_remaining"] = plant_topic.get("crew_alive")
+            summary["crew_lost"] = plant_topic.get("crew_lost_total")
+            model = getattr(backend, "model", None)
+            state = getattr(model, "state", None)
+            if state is not None:
+                summary["crew_lost_by_cause"] = {
+                    **dict(dwell_policy.lost_by_cause),
+                    "o2_physics": int(getattr(state, "crew_lost_o2", 0)),
+                    "water_physics": int(getattr(state, "crew_lost_water", 0)),
+                    "co2_physics": int(getattr(state, "crew_lost_co2", 0)),
+                }
         summary.update(
             _omit_nulls(
                 {
@@ -393,6 +542,7 @@ class SsosEclssLoopScenario(Scenario):
         if isinstance(team, SsosEclssLoopTeam) and team.mode in {"labeled_rule_base", "llm"}:
             summary["team_count"] = team.team_cfg.count
             summary["agent_ids"] = list(team.team_cfg.agent_ids)
+            summary["agent_ids_remaining"] = list(team.active_ids)
             if team.mode == "llm":
                 summary["max_actions_per_step"] = team.max_actions_per_step
             proposals = team.propose_post_run_design(summary)

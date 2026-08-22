@@ -89,8 +89,8 @@ Baseline runs show how storage evolves without agent intervention.
 
 | Condition (typical) | Operational command |
 | --- | --- |
-| CO₂ ≥ `co2_storage_high_kg` (default 1.5 kg) | `air_revitalisation` (ARS) |
-| O₂ ≤ `o2_storage_low_kg` (default 0.45 kg) | `oxygen_generation` (OGS); optional `request_co2` first when `request_co2_before_ogs: true` (default **false**) |
+| CO₂ ≥ `co2_storage_high_kg` (default 2.0 kg) | `air_revitalisation` (ARS) |
+| O₂ ≤ `o2_storage_low_kg` (default 6.0 kg) | `oxygen_generation` (OGS); optional `request_co2` first when `request_co2_before_ogs: true` (default **false**) |
 
 **`request_co2_before_ogs`:** default off so feedstock matches real SSOS (OGS calls `/ars/request_co2` itself). Opt-in `true` (including via design proposals) can **double-debit CO₂ on LoopMock** in the same step: explicit `request_co2` plus OGS Sabatier storage subtract — LoopMock has no intermediate CO₂ buffer.
 
@@ -117,8 +117,8 @@ Each step: all N agents deliberate in parallel → up to `agents.max_actions_per
 simulation:
   steps: 8
   initial_co2_storage_kg: 1.5
-  initial_o2_storage_kg: 0.48
-  initial_product_water_l: 100.0
+  initial_o2_storage_kg: 8.0
+  initial_product_water_l: 80.0
 
 backend:
   kind: mock  # mock | plant_sim | ros2 — also overridable via SSOS_ECLSS_BACKEND env var
@@ -129,9 +129,10 @@ mock_dynamics:
   ogs_o2_gain_kg: 0.1
 
 thresholds:
-  co2_storage_high_kg: 1.5
-  co2_storage_critical_kg: 2.2
-  o2_storage_low_kg: 0.45
+  co2_storage_high_kg: 2.0
+  co2_storage_critical_kg: 8.0
+  o2_storage_low_kg: 6.0
+  o2_storage_critical_kg: 1.0
   product_water_low_l: 50.0
 
 # Off by default. Enable with --inject-failures or inject_failures: true
@@ -201,8 +202,8 @@ llm:
 
 | Metric | safe | warning | critical |
 | --- | --- | --- | --- |
-| CO₂ storage (kg) | < high (1.5) | high to < critical | ≥ critical (2.2) |
-| O₂ storage (kg) | > low (0.45) | low×0.75 to low | ≤ low×0.75 (0.3375) |
+| CO₂ storage (kg) | < high (2.0) | high to < critical | ≥ critical (8.0) |
+| O₂ storage (kg) | > low (6.0) | critical to low (1.0–6.0) | ≤ critical (1.0) |
 | Product water (L) | > low (50) | low×0.5 to low | ≤ low×0.5 (25) |
 | `overall` | all safe | worse of the two | worse of the two |
 

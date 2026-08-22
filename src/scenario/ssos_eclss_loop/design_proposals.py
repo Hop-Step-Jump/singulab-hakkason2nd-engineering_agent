@@ -12,6 +12,11 @@ import json
 from pathlib import Path
 from typing import Any, Callable, Dict, List
 
+from scenario.ssos_eclss_loop.health import (
+    DEFAULT_CO2_STORAGE_HIGH_KG,
+    DEFAULT_O2_STORAGE_LOW_KG,
+)
+
 DESIGN_DOMAIN = "ssos_graph"
 
 SSOS_CHANGE_KINDS = frozenset(
@@ -301,8 +306,8 @@ def build_design_proposals_from_run(
     final_co2 = summary.get("final_co2_storage_kg")
     peak_co2 = summary.get("peak_co2_storage_kg")
     min_o2 = summary.get("min_o2_storage_kg")
-    co2_high = float(policy.get("co2_storage_high_kg", 1.5))
-    o2_low = float(policy.get("o2_storage_low_kg", 0.45))
+    co2_high = float(policy.get("co2_storage_high_kg", DEFAULT_CO2_STORAGE_HIGH_KG))
+    o2_low = float(policy.get("o2_storage_low_kg", DEFAULT_O2_STORAGE_LOW_KG))
 
     co2_stressed = (
         str(final_health.get("co2_status", "")).lower() in {"warning", "critical"}

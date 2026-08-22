@@ -147,7 +147,7 @@ SSOS の ECLSS は、閉鎖環境の **CO₂ 除去（ARS）**、**O₂ 生成�
 | **運用コマンド** | — | ARS / OGS Action、`request_co2` / `request_o2` Service |
 | **設計提案** | — | `ssos_graph`（`action_profile`、`graph_rewire` 等） |
 
-**ヘルス閾値（ストレージ）**: CO₂ warning ≥ 1.5 kg / critical ≥ 2.2 kg；O₂ warning ≤ 0.45 kg / critical ≤ 0.3375 kg。詳細は [scenario-ssos-eclss-loop.md](scenario-ssos-eclss-loop.md)。
+**ヘルス閾値（ストレージ）**: CO₂ warning ≥ 2.0 kg / critical ≥ 8.0 kg；O₂ warning ≤ 6.0 kg / critical ≤ 1.0 kg。詳細は [scenario-ssos-eclss-loop.md](scenario-ssos-eclss-loop.md)。
 
 #### SSOS ECLSS サブシステム（概念）
 

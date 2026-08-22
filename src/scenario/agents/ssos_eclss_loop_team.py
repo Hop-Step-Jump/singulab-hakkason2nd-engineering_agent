@@ -35,6 +35,11 @@ from scenario.ssos_eclss_loop.design_proposals import (
     ACTION_PROFILE_FIELDS_BY_SUBSYSTEM,
     build_design_proposals_from_run,
 )
+from scenario.ssos_eclss_loop.health import (
+    DEFAULT_CO2_STORAGE_CRITICAL_KG,
+    DEFAULT_CO2_STORAGE_HIGH_KG,
+    DEFAULT_O2_STORAGE_LOW_KG,
+)
 
 _ECLSS_OPERATIONAL_KINDS = frozenset(
     {"air_revitalisation", "oxygen_generation", "water_recovery", "request_co2", "request_o2"}
@@ -116,21 +121,46 @@ class SsosEclssLoopTeam(Team):
             config.get("max_actions_per_step", 1),
             team_count=self.team_cfg.count,
         )
+        self._active_ids: List[str] = list(self.team_cfg.agent_ids)
+
+    @property
+    def active_ids(self) -> List[str]:
+        return list(self._active_ids)
+
+    def set_crew_alive(self, crew_alive: int) -> List[str]:
+        """Shrink the operator roster from the tail to match occupant count.
+
+        Occupants never return. Returns agent ids removed this call.
+        """
+        n = max(0, min(int(crew_alive), self.team_cfg.count))
+        previous = len(self._active_ids)
+        if n >= previous:
+            return []
+        lost_ids = list(self.team_cfg.agent_ids[n:previous])
+        self._active_ids = list(self.team_cfg.agent_ids[:n])
+        return lost_ids
 
     def _action_rep_id(self, step: int) -> str:
         """Round-robin representative for 0-based scenario steps (`step % N`)."""
-        return self.team_cfg.agent_ids[step % self.team_cfg.count]
+        ids = self._active_ids
+        if not ids:
+            raise ValueError("no surviving operators")
+        return ids[step % len(ids)]
 
     def _action_rep_ids(self, step: int) -> List[str]:
         """Rotating window of action representatives (length ``max_actions_per_step``)."""
-        n = self.team_cfg.count
+        ids = self._active_ids
+        n = len(ids)
+        if n == 0:
+            return []
         k = min(self.max_actions_per_step, n)
         start = step % n
-        ids = self.team_cfg.agent_ids
         return [ids[(start + offset) % n] for offset in range(k)]
 
     def run_step(self, backend: EclssBackend, obs: EclssLoopObservation) -> StepEclssOutcome:
         _ = backend
+        if not self._active_ids:
+            return StepEclssOutcome()
         if self.llm_mode:
             outcome = self._run_step_llm(obs)
             self.memory_store.commit_step(outcome)
@@ -147,6 +177,15 @@ class SsosEclssLoopTeam(Team):
 
     def propose_post_run_design(self, summary: Dict[str, Any]) -> Dict[str, Any]:
         baseline_graph = dict(self.config.get("ssos_graph") or {})
+        if not self._active_ids:
+            return {
+                "design_domain": DESIGN_DOMAIN,
+                "proposed_by": "",
+                "decision_source": "llm" if self.llm_mode else "rule",
+                "message": "",
+                "changes": [],
+                "baseline_graph": baseline_graph,
+            }
         steps = int(summary.get("steps", 0))
         rep = self._action_rep_id(steps - 1 if steps > 0 else 0)
         if self.llm_mode:
@@ -180,10 +219,10 @@ class SsosEclssLoopTeam(Team):
                     contract=message_contract(),
                     required=("message",),
                 )
-                for agent_id in self.team_cfg.agent_ids
+                for agent_id in self._active_ids
             ]
         )
-        for agent_id, msg in zip(self.team_cfg.agent_ids, turns):
+        for agent_id, msg in zip(self._active_ids, turns):
             if msg is not None:
                 outcome.messages.append(msg)
                 step_discourse.append(msg)
@@ -220,9 +259,9 @@ class SsosEclssLoopTeam(Team):
     def _run_step_labeled(self, obs: EclssLoopObservation) -> StepEclssOutcome:
         outcome = StepEclssOutcome()
         rep = self._action_rep_id(obs.step)
-        co2_high = float(self.policy.get("co2_storage_high_kg", 1.5))
-        co2_critical = float(self.policy.get("co2_storage_critical_kg", 2.2))
-        o2_low = float(self.policy.get("o2_storage_low_kg", 0.45))
+        co2_high = float(self.policy.get("co2_storage_high_kg", DEFAULT_CO2_STORAGE_HIGH_KG))
+        co2_critical = float(self.policy.get("co2_storage_critical_kg", DEFAULT_CO2_STORAGE_CRITICAL_KG))
+        o2_low = float(self.policy.get("o2_storage_low_kg", DEFAULT_O2_STORAGE_LOW_KG))
         co2 = obs.telemetry.co2_storage_kg
         o2 = obs.telemetry.o2_storage_kg
 

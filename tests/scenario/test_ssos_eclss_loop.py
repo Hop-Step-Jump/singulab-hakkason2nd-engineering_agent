@@ -96,7 +96,11 @@ def test_ssos_eclss_loop_labeled_agents_invoke_ars(tmp_path: Path):
     run_dir = run_scenario(
         "ssos_eclss_loop",
         output_dir=tmp_path / "labeled",
-        overrides={"agents": {"mode": "labeled_rule_base"}},
+        overrides={
+            "agents": {"mode": "labeled_rule_base", "team": {"count": 4}},
+            "plant_sim": {"crew": {"size": 4}},
+            "simulation": {"initial_o2_storage_kg": 8.0},
+        },
         recreate_output=True,
     )
 
@@ -107,15 +111,19 @@ def test_ssos_eclss_loop_labeled_agents_invoke_ars(tmp_path: Path):
 
     assert summary["agents_mode"] == "labeled_rule_base"
     assert "thresholds" in summary
-    assert summary["thresholds"]["co2_storage_high_kg"] == pytest.approx(1.5)
+    assert summary["thresholds"]["co2_storage_high_kg"] == pytest.approx(2.0)
+    assert summary["thresholds"]["co2_storage_critical_kg"] == pytest.approx(8.0)
     assert "health_inputs" in summary
-    assert summary["team_count"] == 10
-    assert summary["agent_ids"][0] == "eclss_operator_1"
-    assert summary["agent_ids"][-1] == "eclss_operator_10"
-    assert len(summary["agent_ids"]) == 10
+    assert summary["team_count"] == 4
+    assert summary["agent_ids"] == [
+        "eclss_operator_1",
+        "eclss_operator_2",
+        "eclss_operator_3",
+        "eclss_operator_4",
+    ]
     assert summary["message_count"] > 0
     assert summary["operational_command_count"] >= 1
-    assert summary["ars_invoked_step"] == 4
+    assert summary["ars_invoked_step"] == 12
 
     message_types = {m["message_type"] for m in messages}
     assert "alert" in message_types
@@ -129,8 +137,8 @@ def test_ssos_eclss_loop_labeled_agents_invoke_ars(tmp_path: Path):
 
     assert telemetry[0]["step"] == 0
     assert telemetry[0]["co2_storage_kg"] == pytest.approx(1.3)
-    assert telemetry[5]["co2_storage_kg"] < telemetry[4]["co2_storage_kg"], (
-        "ARS should reduce CO2 storage after step 4"
+    assert telemetry[13]["co2_storage_kg"] < telemetry[12]["co2_storage_kg"], (
+        "ARS should reduce CO2 storage after step 12"
     )
     assert (run_dir / "design_proposals.json").exists()
     assert summary.get("design_proposal_count", 0) >= 1
@@ -157,7 +165,10 @@ def test_ssos_eclss_loop_labeled_reinvokes_ars_when_co2_reexceeds(tmp_path: Path
     run_dir = run_scenario(
         "ssos_eclss_loop",
         output_dir=tmp_path / "labeled_rearm",
-        overrides={"agents": {"mode": "labeled_rule_base"}},
+        overrides={
+            "agents": {"mode": "labeled_rule_base"},
+            "simulation": {"initial_o2_storage_kg": 8.0},
+        },
         recreate_output=True,
     )
 
@@ -171,15 +182,18 @@ def test_ssos_eclss_loop_labeled_reinvokes_ars_when_co2_reexceeds(tmp_path: Path
     ]
 
     assert summary["operational_command_count"] >= 2
-    assert 4 in ars_steps
-    assert any(step > 4 for step in ars_steps), "ARS should re-fire after CO2 regrows past threshold"
+    assert 12 in ars_steps
+    assert any(step > 12 for step in ars_steps), "ARS should re-fire after CO2 regrows past threshold"
 
 
 def test_ssos_eclss_loop_provenance_includes_operational_records(tmp_path: Path):
     run_dir = run_scenario(
         "ssos_eclss_loop",
         output_dir=tmp_path / "labeled_prov",
-        overrides={"agents": {"mode": "labeled_rule_base"}},
+        overrides={
+            "agents": {"mode": "labeled_rule_base"},
+            "simulation": {"initial_o2_storage_kg": 8.0},
+        },
         recreate_output=True,
     )
 
@@ -378,6 +392,7 @@ def test_ssos_eclss_loop_llm_agents_invoke_ars(tmp_path: Path, monkeypatch):
                 "max_actions_per_step": 1,
                 "team": {"count": 4},
             },
+            "plant_sim": {"crew": {"size": 4}},
         },
         recreate_output=True,
     )
@@ -546,9 +561,8 @@ def test_ssos_eclss_loop_plant_sim_writes_thresholds_and_metabolism(tmp_path: Pa
 
     assert summary["backend"] == "plant_sim"
     assert "thresholds" in summary
-    assert summary["thresholds"]["o2_storage_critical_kg"] == pytest.approx(
-        summary["thresholds"]["o2_storage_low_kg"] * 0.75
-    )
+    assert summary["thresholds"]["o2_storage_low_kg"] == pytest.approx(6.0)
+    assert summary["thresholds"]["o2_storage_critical_kg"] == pytest.approx(1.0)
 
     metabolism_rows = [
         row
@@ -559,6 +573,24 @@ def test_ssos_eclss_loop_plant_sim_writes_thresholds_and_metabolism(tmp_path: Pa
     ]
     assert len(metabolism_rows) == 2  # steps 1 and 2 (advance before poll)
 
+    by_step = {}
+    for row in telemetry:
+        by_step.setdefault(row["step"], []).append(row)
+    assert all(len(rows) <= 2 for rows in by_step.values())
+    health = _read_jsonl(run_dir / "health_metrics.jsonl")
+    health_by_step = {}
+    for row in health:
+        health_by_step.setdefault(row["step"], []).append(row)
+    for step, rows in by_step.items():
+        tel_post = sum(1 for row in rows if row.get("post_ops") is True)
+        health_post = sum(1 for row in health_by_step[step] if row.get("post_ops") is True)
+        assert tel_post == health_post <= 1
+
+    assert "crew_remaining" in summary
+    assert summary["crew_initial"] == 50
+    topic = telemetry[-1]["raw_topics"]["plant_sim"]
+    assert topic["crew_alive"] == summary["crew_remaining"]
+
     proposals_path = run_dir / "design_proposals.json"
     if proposals_path.exists():
         proposals = json.loads(proposals_path.read_text(encoding="utf-8"))
@@ -566,4 +598,150 @@ def test_ssos_eclss_loop_plant_sim_writes_thresholds_and_metabolism(tmp_path: Pa
             assert change.get("why")
             assert change.get("what")
             assert change.get("how")
+
+
+def test_plant_sim_rejects_mismatched_team_count(tmp_path: Path):
+    with pytest.raises(ValueError, match="must match team.count"):
+        run_scenario(
+            "ssos_eclss_loop",
+            output_dir=tmp_path / "mismatch",
+            overrides={
+                "backend": {"kind": "plant_sim"},
+                "agents": {"mode": "labeled_rule_base"},
+                "plant_sim": {"crew": {"size": 5}},
+                "simulation": {"steps": 2},
+            },
+            recreate_output=True,
+        )
+
+
+def test_plant_sim_survival_off_skips_duplicate_post_ops(tmp_path: Path):
+    run_dir = run_scenario(
+        "ssos_eclss_loop",
+        output_dir=tmp_path / "survival_off",
+        overrides={
+            "backend": {"kind": "plant_sim"},
+            "agents": {"mode": "none"},
+            "simulation": {"steps": 3},
+            "plant_sim": {"survival": {"enabled": False}},
+        },
+        recreate_output=True,
+    )
+    telemetry = _read_jsonl(run_dir / "telemetry.jsonl")
+    health = _read_jsonl(run_dir / "health_metrics.jsonl")
+    assert len(telemetry) == 3
+    assert len(health) == 3
+    assert all(row.get("post_ops") is not True for row in telemetry)
+    assert all(row.get("post_ops") is not True for row in health)
+
+
+def test_plant_sim_survival_drops_crew_when_o2_starved(tmp_path: Path):
+    run_dir = run_scenario(
+        "ssos_eclss_loop",
+        output_dir=tmp_path / "starve",
+        overrides={
+            "backend": {"kind": "plant_sim"},
+            "agents": {"mode": "none"},
+            "simulation": {
+                "steps": 6,
+                "initial_o2_storage_kg": 0.02,
+                "initial_product_water_l": 80.0,
+                "initial_co2_storage_kg": 0.5,
+            },
+            "plant_sim": {"survival": {"enabled": True}},
+        },
+        recreate_output=True,
+    )
+    summary = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["crew_remaining"] < summary["crew_initial"]
+    assert summary["crew_lost"] == summary["crew_initial"] - summary["crew_remaining"]
+    events = _read_jsonl(run_dir / "events.jsonl")
+    assert any(row.get("kind") == "/eclss/events/crew_lost" for row in events)
+
+
+def test_plant_sim_o2_warning_dwell_before_physics_floor(tmp_path: Path):
+    """WARNING dwell drops one person while tanks still cover the next interval."""
+    run_dir = run_scenario(
+        "ssos_eclss_loop",
+        output_dir=tmp_path / "dwell",
+        overrides={
+            "backend": {"kind": "plant_sim"},
+            "agents": {"mode": "none"},
+            "simulation": {
+                "steps": 3,
+                "initial_o2_storage_kg": 5.0,
+                "initial_product_water_l": 80.0,
+                "initial_co2_storage_kg": 0.5,
+            },
+            "plant_sim": {
+                "crew": {"size": 4},
+                "survival": {"enabled": True},
+            },
+        },
+        recreate_output=True,
+    )
+    summary = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
+    assert summary["crew_initial"] == 4
+    assert summary["crew_remaining"] == 3
+    events = _read_jsonl(run_dir / "events.jsonl")
+    lost_events = [row for row in events if row.get("kind") == "/eclss/events/crew_lost"]
+    assert lost_events
+    assert "o2_warning" in lost_events[0].get("limiting", [])
+    assert "o2_physics" not in lost_events[0].get("limiting", [])
+    telemetry = _read_jsonl(run_dir / "telemetry.jsonl")
+    health = _read_jsonl(run_dir / "health_metrics.jsonl")
+    by_step_tel = {}
+    for row in telemetry:
+        by_step_tel.setdefault(row["step"], []).append(row)
+    by_step_health = {}
+    for row in health:
+        by_step_health.setdefault(row["step"], []).append(row)
+    assert all(len(rows) <= 2 for rows in by_step_tel.values())
+    assert all(len(rows) <= 2 for rows in by_step_health.values())
+    lost_step = lost_events[0]["step"]
+    post = next(row for row in by_step_tel[lost_step] if row.get("post_ops") is True)
+    survival = (post.get("raw_topics") or {}).get("plant_sim", {}).get("survival") or {}
+    assert survival.get("lost_this_step") == 1
+    assert "o2_warning" in (survival.get("limiting") or [])
+    assert any(row.get("post_ops") is True for row in by_step_health[lost_step])
+
+
+def test_plant_sim_skips_physics_floor_on_final_step(tmp_path: Path):
+    """Look-ahead O2 floor applies only when another advance_step remains."""
+    starved = {
+        "backend": {"kind": "plant_sim"},
+        "agents": {"mode": "none"},
+        "simulation": {
+            "initial_o2_storage_kg": 0.02,
+            "initial_product_water_l": 80.0,
+            "initial_co2_storage_kg": 0.5,
+        },
+        # Keep 0.02 kg O2 out of WARNING/CRITICAL so only the physics floor can cut crew.
+        "thresholds": {"o2_storage_low_kg": 0.01, "o2_storage_critical_kg": 0.005},
+        "plant_sim": {"crew": {"size": 4}, "survival": {"enabled": True}},
+    }
+    one = run_scenario(
+        "ssos_eclss_loop",
+        output_dir=tmp_path / "final_only",
+        overrides={**starved, "simulation": {**starved["simulation"], "steps": 1}},
+        recreate_output=True,
+    )
+    one_summary = json.loads((one / "summary.json").read_text(encoding="utf-8"))
+    assert one_summary["crew_initial"] == 4
+    assert one_summary["crew_remaining"] == 4
+    assert one_summary["crew_lost"] == 0
+
+    two = run_scenario(
+        "ssos_eclss_loop",
+        output_dir=tmp_path / "has_next",
+        overrides={**starved, "simulation": {**starved["simulation"], "steps": 2}},
+        recreate_output=True,
+    )
+    two_summary = json.loads((two / "summary.json").read_text(encoding="utf-8"))
+    assert two_summary["crew_remaining"] < 4
+    events = _read_jsonl(two / "events.jsonl")
+    lost_events = [row for row in events if row.get("kind") == "/eclss/events/crew_lost"]
+    assert lost_events
+    assert "o2_physics" in lost_events[0].get("limiting", [])
+    assert lost_events[0]["step"] == 0
 

@@ -156,6 +156,9 @@ def build_step_node_numbers(
             if line:
                 nodes["cabin"].append(line)
         if topic:
+            alive = topic.get("crew_alive")
+            if isinstance(alive, (int, float)):
+                nodes["crew"].insert(0, f"alive {int(alive)}")
             for key, label, unit in (
                 ("captured_co2_kg", "captured CO2", "kg"),
             ):

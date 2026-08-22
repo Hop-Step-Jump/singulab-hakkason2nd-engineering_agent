@@ -44,6 +44,68 @@ def test_poll_telemetry_maps_cabin_co2_and_is_independent():
     assert t2.co2_storage_kg > t1.co2_storage_kg
 
 
+def test_poll_telemetry_exports_crew_alive():
+    b = _backend(crew_size=3, survival_enabled=True)
+    topic = b.poll_telemetry().raw_topics["plant_sim"]
+    assert topic["crew_initial"] == 3
+    assert topic["crew_alive"] == 3
+    b.apply_capacity_drop()
+    again = b.poll_telemetry()
+    assert "crew_alive" in again.raw_topics["plant_sim"]
+
+
+def test_set_crew_alive_never_revives():
+    b = _backend(crew_size=4, survival_enabled=True)
+    lost = b.set_crew_alive(2)
+    assert lost == 2
+    assert b.model.state.crew_alive == 2
+    assert b.set_crew_alive(4) == 0
+    assert b.model.state.crew_alive == 2
+
+
+def test_poll_telemetry_includes_dwell_losses_until_next_step():
+    b = _backend(
+        crew_size=4,
+        survival_enabled=True,
+        initial_o2_kg=10.0,
+        initial_product_water_l=100.0,
+    )
+    lost = b.set_crew_alive(3, limiting=["o2_warning"])
+    assert lost == 1
+    survival = b.poll_telemetry().raw_topics["plant_sim"]["survival"]
+    assert survival["lost_this_step"] == 1
+    assert survival["limiting"] == ["o2_warning"]
+
+    physics = b.apply_capacity_drop()
+    assert physics["lost_this_step"] == 0
+    merged = b.poll_telemetry().raw_topics["plant_sim"]["survival"]
+    assert merged["lost_this_step"] == 1
+    assert merged["limiting"] == ["o2_warning"]
+
+    b.advance_step()
+    cleared = b.poll_telemetry().raw_topics["plant_sim"]["survival"]
+    assert cleared["lost_this_step"] == 0
+    assert cleared["limiting"] == []
+
+
+def test_apply_capacity_drop_telemetry_uses_physics_limiting_labels():
+    b = _backend(
+        crew_size=4,
+        survival_enabled=True,
+        initial_o2_kg=0.02,
+        initial_product_water_l=100.0,
+        initial_cabin_co2_kg=0.1,
+    )
+    b.set_crew_alive(3, limiting=["o2_warning"])
+    physics = b.apply_capacity_drop()
+    assert "o2_physics" in physics["limiting"]
+    assert "o2" not in physics["limiting"]
+    survival = b.poll_telemetry().raw_topics["plant_sim"]["survival"]
+    assert "o2_warning" in survival["limiting"]
+    assert "o2_physics" in survival["limiting"]
+    assert "o2" not in survival["limiting"]
+
+
 def test_poll_telemetry_exports_last_metabolism_once():
     b = _backend()
     before = b.poll_telemetry()

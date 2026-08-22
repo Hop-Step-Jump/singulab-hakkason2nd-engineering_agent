@@ -53,6 +53,7 @@ def test_plant_sim_series_extracts_ledgers():
     assert series[0]["urine_buffer_l"] == 0.0
     assert series[0]["grey_water_collected_l"] == 0.2
     assert series[0]["total_o2_shortfall_kg"] == 0.01
+    assert "crew_alive" in series[0]
 
 
 def test_build_line_plot_figure_skips_plant_sim_telemetry():

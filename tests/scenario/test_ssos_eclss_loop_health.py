@@ -20,6 +20,14 @@ from scenario.ssos_eclss_loop.scenario_run import (
 )
 
 
+def test_build_effective_thresholds_defaults_match_scenario_yaml():
+    effective = build_effective_thresholds({})
+    assert effective["co2_storage_high_kg"] == pytest.approx(2.0)
+    assert effective["co2_storage_critical_kg"] == pytest.approx(8.0)
+    assert effective["o2_storage_low_kg"] == pytest.approx(6.0)
+    assert effective["product_water_low_l"] == pytest.approx(50.0)
+
+
 def test_build_effective_thresholds_includes_derived_criticals():
     effective = build_effective_thresholds(
         {
@@ -32,6 +40,19 @@ def test_build_effective_thresholds_includes_derived_criticals():
     assert effective["o2_storage_critical_kg"] == pytest.approx(0.3)
     assert effective["product_water_critical_l"] == pytest.approx(20.0)
     assert "co2" in health_inputs_note()
+
+
+def test_build_effective_thresholds_promotes_yaml_criticals():
+    effective = build_effective_thresholds(
+        {
+            "o2_storage_low_kg": 0.45,
+            "o2_storage_critical_kg": 0.2,
+            "product_water_low_l": 50.0,
+            "product_water_critical_l": 10.0,
+        }
+    )
+    assert effective["o2_storage_critical_kg"] == pytest.approx(0.2)
+    assert effective["product_water_critical_l"] == pytest.approx(10.0)
 
 
 def test_health_unknown_when_telemetry_missing():

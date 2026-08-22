@@ -37,7 +37,10 @@ def test_build_provenance_includes_ssos_operational_records(tmp_path: Path):
     run_dir = run_scenario(
         "ssos_eclss_loop",
         output_dir=tmp_path / "labeled",
-        overrides={"agents": {"mode": "labeled_rule_base"}},
+        overrides={
+            "agents": {"mode": "labeled_rule_base"},
+            "simulation": {"initial_o2_storage_kg": 8.0},
+        },
         recreate_output=True,
     )
     records = build_provenance_records(run_dir)

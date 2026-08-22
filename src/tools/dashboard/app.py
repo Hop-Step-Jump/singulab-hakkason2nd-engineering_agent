@@ -1851,6 +1851,16 @@ def _render_run_comparison(
                     primary_summary.get("ogs_invoked_step", "—"),
                     compare_summary.get("ogs_invoked_step", "—"),
                 ),
+                (
+                    "Crew remaining",
+                    primary_summary.get("crew_remaining", "—"),
+                    compare_summary.get("crew_remaining", "—"),
+                ),
+                (
+                    "Crew lost",
+                    primary_summary.get("crew_lost", "—"),
+                    compare_summary.get("crew_lost", "—"),
+                ),
             ]
         )
     if not primary_ssos or not compare_ssos:

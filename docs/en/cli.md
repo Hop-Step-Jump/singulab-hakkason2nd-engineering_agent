@@ -91,6 +91,7 @@ ea job run /tmp/job.json
 ```bash
 ea results
 python3 -m streamlit run src/tools/dashboard/app.py
+python3 -m tools.plant_sim_sensitivity_app  # plant_sim 3×4 knobs; not the run dashboard (port 8502)
 ```
 
 ## SSOS Docker (`ssos_eclss_loop` + ros2) { #ssos-docker-ssos_eclss_loop--ros2 }

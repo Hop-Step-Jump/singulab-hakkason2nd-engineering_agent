@@ -594,8 +594,8 @@ SsosEclssLoopTeam                         # scenario/agents/ssos_eclss_loop_team
 
 | Metric | safe | warning | critical |
 | --- | --- | --- | --- |
-| CO₂ (kg) | < 1.5 | 1.5 to < 2.2 | ≥ 2.2 |
-| O₂ (kg) | > 0.45 | 0.3375 to 0.45 | ≤ 0.3375 |
+| CO₂ (kg) | < 2.0 | 2.0 to < 8.0 | ≥ 8.0 |
+| O₂ (kg) | > 6.0 | 1.0 to 6.0 | ≤ 1.0 |
 | Product water (L) | > 50 | 25 to 50 | ≤ 25 |
 
 `thresholds.co2_storage_high_kg`, etc. are operational triggers, separate from health bands.

@@ -1,68 +1,60 @@
 # ssos_eclss_loop — SSOS ECLSS operator team (Crew Simulation replacement)
 
-mode: labeled_rule_base
+mode: labeled_rule_base  # none | labeled_rule_base | llm (CLI --agents-mode overrides)
 
 # Per-agent private entries (not steps). llm commit writes ~2–3 strings per
 # step (optional JSON "memory", message+reasoning summary, plus own commands).
-# 30 keeps the newest ~10–15 steps of private recall.
-memory_limit: 30
+# 30 keeps the newest ~10–15 steps of private recall (vLLM prompt budget).
+memory_limit: 30  # [-] max memories kept per operator
 # Team discourse is a sliding window of AgentMessage objects. One llm step
 # emits ~count deliberation messages + max_actions_per_step action/skip
-# messages (~12 with count 10 and 2 action reps). 22 keeps roughly the
-# previous two steps so operators can cite teammates (same-step deliberation
-# is still simultaneous).
-discourse_window: 22
+# messages (~52 with count 50 and 2 action reps). 22 is a vLLM prompt budget
+# (less than one full 50-person step) so operators can still cite recent
+# teammates (same-step deliberation is still simultaneous).
+discourse_window: 22  # [-] recent utterances visible to each operator
 
 team:
-  count: 10
-  id_prefix: eclss_operator
-  persona: |
+  count: 50  # [person] operator N; must match scenario.yaml plant_sim.crew.size for plant_sim
+  id_prefix: eclss_operator  # ids are eclss_operator_0 .. N-1
+  persona: |  # shared prompt for llm mode (labeled_rule_base ignores this)
     SSOS ECLSS operator engineer. Read storage telemetry (/co2_storage, /o2_storage);
     coordinate ARS air_revitalisation and OGS oxygen_generation via backend actions.
     Sabatier CO2 feedstock is normally left to OGS (internal /ars/request_co2); issue an
     explicit request_co2 before OGS only when policy request_co2_before_ogs is true.
     No topology changes at runtime.
 
-# policy: labeled_rule_base operational profiles only.
-# Band thresholds (co2_storage_high_kg, o2_storage_low_kg, …) are derived from
-# scenario.yaml thresholds at run time — do not duplicate them here.
+# policy: labeled_rule_base operational profiles only (llm does not read these).
+# Storage-band triggers come from scenario.yaml thresholds at run time — do not duplicate them here.
 # Mass fields are kilograms; water volumes are liters.
-# request_co2_before_ogs defaults off: real SSOS OGS already calls /ars/request_co2
-# internally for Sabatier; an explicit pre-request would double-withdraw CO₂.
-# If set true (opt-in / design proposal), LoopMock has no CO₂ buffer between the
-# explicit request_co2 and OGS Sabatier debit, so the same step can debit twice.
 policy:
-  request_co2_before_ogs: false
-  request_co2_amount: 0.025
-  wrs_feed_trigger_l: 0.5
-  ars_goal:
-    initial_co2_mass: 1.8
-    initial_moisture_content: 25.0
-    initial_contaminants: 5.0
-  ogs_goal:
-    # SHAKEOUT tuning: one-shot OGS latch only re-fires ~every other step, so the
-    # per-action water must cover >1 step of 4-crew O2 demand or O2 starves to 0.
-    # 0.15 kg holds O2 in the safe band. Post-merge: decouple action duration (B4)
-    # or make OGS re-fire every step while below band, then right-size this.
-    input_water_mass: 0.15
-    iodine_concentration: 2.0
-  wrs_goal:
-    urine_volume: 2.0
+  request_co2_before_ogs: false  # if true, explicit /ars/request_co2 before OGS (can double-debit on LoopMock)
+  request_co2_amount: 0.025  # [kg] CO2 requested when the flag above is true
+  wrs_feed_trigger_l: 0.5  # [L] start WRS when urine+grey buffer ≥ this
+  ars_goal:  # air_revitalisation payload
+    initial_co2_mass: 1.8  # [kg] plant_sim ARS scale = this / plant_sim.ars.reference_goal_co2_kg
+    initial_moisture_content: 25.0  # [%] 0–100; plant_sim ignores, ROS2 forwards
+    initial_contaminants: 5.0  # [%] 0–100; plant_sim ignores, ROS2 forwards
+  ogs_goal:  # oxygen_generation payload
+    # Nameplate-sized request (~ogs_max_o2_kg_day × ogs_operation_seconds), not per-crew demand.
+    input_water_mass: 0.15  # [kg] water into electrolysis per OGS action
+    iodine_concentration: 2.0  # [mg/L] plant_sim ignores, ROS2 forwards
+  wrs_goal:  # water_recovery_systems payload
+    urine_volume: 2.0  # [L] urine requested per WRS action (capped by buffer and max_feed)
 
 llm:
   # ollama (local daemon) or vllm (lab GPU server: https://github.com/hirototamura/vllm_server)
-  provider: ollama
+  provider: ollama  # ollama | vllm
   # Host Ollama: localhost. In SSOS Docker use host.docker.internal (ea-loop sets OLLAMA_BASE_URL).
   # Lab vLLM: --llm-provider vllm (or LLM_PROVIDER=vllm). Defaults to http://10.10.0.108:8000/v1 / qwen3-8b.
   # Omit max_concurrency so Ollama keeps model caps (~8 for 9b). vLLM 8B still
   # defaults to 100 in-flight when the provider is switched.
-  # max_concurrency: 100
-  base_url: http://localhost:11434
-  model: qwen3.5:9b
-  temperature: 0.45
-  max_tokens: 768
-  repeat_penalty: 1.1
-  repeat_last_n: 128
-  min_p: 0.05
-  think: false
-  api_timeout: 20
+  # max_concurrency: 100  # in-flight cap; omit for provider/model defaults
+  base_url: http://localhost:11434  # OpenAI-compatible or Ollama endpoint
+  model: qwen3.5:9b  # model id on that endpoint
+  temperature: 0.45  # [-] sampling temperature
+  max_tokens: 768  # [-] max completion tokens (vLLM prompt fit)
+  repeat_penalty: 1.1  # [-] penalize token repeats
+  repeat_last_n: 128  # [-] window (tokens) for the repeat penalty
+  min_p: 0.05  # [-] min-p sampler floor
+  think: false  # if true, request model chain-of-thought (provider-dependent)
+  api_timeout: 20  # [s] HTTP timeout; Ollama only — vLLM ignores this

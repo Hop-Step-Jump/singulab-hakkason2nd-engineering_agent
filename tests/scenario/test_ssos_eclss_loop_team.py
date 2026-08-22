@@ -28,6 +28,38 @@ def _team_config():
     }
 
 
+def test_set_crew_alive_drops_tail_and_noop_when_empty():
+    team = SsosEclssLoopTeam(_team_config())
+    lost = team.set_crew_alive(1)
+    assert lost == ["op_2"]
+    assert team.active_ids == ["op_1"]
+    lost_again = team.set_crew_alive(0)
+    assert lost_again == ["op_1"]
+    backend = LoopMockEclssBackend({"simulation": {}, "mock_dynamics": {}})
+    snap = backend.poll_telemetry()
+    obs = EclssLoopObservation(step=3, telemetry=snap, health={"overall": "critical"})
+    outcome = team.run_step(backend, obs)
+    assert outcome.commands == []
+    assert outcome.messages == []
+
+
+def test_action_rep_id_does_not_resurrect_dead_operators():
+    team = SsosEclssLoopTeam(_team_config())
+    team.set_crew_alive(0)
+    assert team.active_ids == []
+    with pytest.raises(ValueError, match="no surviving operators"):
+        team._action_rep_id(0)
+
+
+def test_propose_post_run_design_skips_when_crew_gone():
+    team = SsosEclssLoopTeam(_team_config())
+    team.set_crew_alive(0)
+    proposal = team.propose_post_run_design({"steps": 3, "crew_remaining": 0})
+    assert proposal["changes"] == []
+    assert proposal["proposed_by"] == ""
+    assert proposal["decision_source"] == "rule"
+
+
 def test_team_applies_ars_to_backend():
     team = SsosEclssLoopTeam(_team_config())
     backend = LoopMockEclssBackend(

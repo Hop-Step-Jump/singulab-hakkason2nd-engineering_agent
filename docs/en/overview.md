@@ -145,7 +145,7 @@ Spec: [scenario-scrubber-degradation.md](scenario-scrubber-degradation.md).
 | **Operational command** | — | ARS / OGS Actions, `request_co2` / `request_o2` Services |
 | **Design proposal** | — | `ssos_graph` (`action_profile`, `graph_rewire`, etc.) |
 
-**Health thresholds (storage)**: CO₂ warning ≥ 1.5 kg / critical ≥ 2.2 kg; O₂ warning ≤ 0.45 kg / critical ≤ 0.3375 kg. Details: [scenario-ssos-eclss-loop.md](scenario-ssos-eclss-loop.md).
+**Health thresholds (storage)**: CO₂ warning ≥ 2.0 kg / critical ≥ 8.0 kg; O₂ warning ≤ 6.0 kg / critical ≤ 1.0 kg. Details: [scenario-ssos-eclss-loop.md](scenario-ssos-eclss-loop.md).
 
 #### SSOS ECLSS subsystems (conceptual)
 

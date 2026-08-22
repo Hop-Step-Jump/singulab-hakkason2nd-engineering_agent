@@ -30,10 +30,24 @@ from environment.ssos.eclss.types import (
 )
 
 _SUBSYSTEMS = ("ars", "ogs", "wrs")
+_PHYSICS_LIMITING_LABELS = {
+    "o2": "o2_physics",
+    "water": "water_physics",
+    "co2": "co2_physics",
+}
 
 
 def _finite(value: Any) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+
+def _map_physics_limiting(limiting: list) -> list[str]:
+    mapped: list[str] = []
+    for item in limiting:
+        label = _PHYSICS_LIMITING_LABELS.get(str(item), str(item))
+        if label not in mapped:
+            mapped.append(label)
+    return mapped
 
 
 class PlantSimEclssBackend:
@@ -47,6 +61,7 @@ class PlantSimEclssBackend:
         self.last_ogs_goal: Optional[OgsGoal] = None
         self.last_wrs_goal: Optional[WrsGoal] = None
         self._last_metabolism: Optional[Dict[str, float]] = None
+        self._last_survival: Dict[str, Any] = {"lost_this_step": 0, "limiting": []}
 
     @classmethod
     def from_scenario_config(cls, config: Mapping[str, Any]) -> "PlantSimEclssBackend":
@@ -56,11 +71,45 @@ class PlantSimEclssBackend:
     # step capability (StepAdvanceableBackend)
     # ------------------------------------------------------------------ #
     def advance_step(self) -> None:
+        self._last_survival = {"lost_this_step": 0, "limiting": []}
         self._last_metabolism = self.model.advance_step()
 
-    # ------------------------------------------------------------------ #
-    # telemetry
-    # ------------------------------------------------------------------ #
+    def apply_capacity_drop(self) -> Dict[str, Any]:
+        """Physics floor after band-dwell; returns physics-only lost/limiting.
+
+        Telemetry ``survival`` merges this with any dwell losses already
+        recorded by ``set_crew_alive`` in the same step.
+        """
+        result = dict(self.model.apply_capacity_drop())
+        result["limiting"] = _map_physics_limiting(list(result.get("limiting") or []))
+        self._merge_last_survival(
+            int(result.get("lost_this_step") or 0),
+            list(result.get("limiting") or []),
+        )
+        return result
+
+    def set_crew_alive(self, n: int, limiting: Optional[list] = None) -> int:
+        """Hard-set live occupants; never increases. Returns additional lost."""
+        s = self.model.state
+        current = int(s.crew_alive)
+        n = max(0, min(int(n), current))
+        lost = current - n
+        s.crew_alive = n
+        s.crew_lost_total += lost
+        self._merge_last_survival(lost, list(limiting or []))
+        return lost
+
+    def _merge_last_survival(self, lost: int, limiting: list) -> None:
+        if lost <= 0 and not limiting:
+            return
+        prev_lost = int(self._last_survival.get("lost_this_step") or 0)
+        prev_lim = list(self._last_survival.get("limiting") or [])
+        extra = [item for item in limiting if item not in prev_lim]
+        self._last_survival = {
+            "lost_this_step": prev_lost + max(0, int(lost)),
+            "limiting": prev_lim + extra,
+        }
+
     def poll_telemetry(self) -> EclssTelemetrySnapshot:
         s = self.model.state
         plant_sim_topic: Dict[str, Any] = {
@@ -73,6 +122,14 @@ class PlantSimEclssBackend:
             "total_wrs_brine_loss_l": s.total_wrs_brine_loss_l,
             "total_o2_shortfall_kg": s.total_o2_shortfall_kg,
             "total_water_shortfall_l": s.total_water_shortfall_l,
+            "crew_initial": self.config.crew_size,
+            "crew_alive": s.crew_alive,
+            "crew_lost_total": s.crew_lost_total,
+            "survival": {
+                "enabled": bool(self.config.survival_enabled),
+                "lost_this_step": int(self._last_survival.get("lost_this_step") or 0),
+                "limiting": list(self._last_survival.get("limiting") or []),
+            },
         }
         if self._last_metabolism is not None:
             plant_sim_topic["last_metabolism"] = dict(self._last_metabolism)

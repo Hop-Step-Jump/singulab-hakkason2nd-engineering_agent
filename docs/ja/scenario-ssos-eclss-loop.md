@@ -88,8 +88,8 @@ SSOS の ECLSS は、閉鎖環境の **CO₂ 除去（ARS）**、**O₂ 生成�
 
 | 条件（目安） | 運用コマンド |
 | --- | --- |
-| CO₂ ≥ `co2_storage_high_kg`（デフォルト 1.5 kg） | `air_revitalisation`（ARS） |
-| O₂ ≤ `o2_storage_low_kg`（デフォルト 0.45 kg） | `oxygen_generation`（OGS）。`request_co2_before_ogs: true` のときだけ先に `request_co2`（既定は **false**） |
+| CO₂ ≥ `co2_storage_high_kg`（デフォルト 2.0 kg） | `air_revitalisation`（ARS） |
+| O₂ ≤ `o2_storage_low_kg`（デフォルト 6.0 kg） | `oxygen_generation`（OGS）。`request_co2_before_ogs: true` のときだけ先に `request_co2`（既定は **false**） |
 
 **`request_co2_before_ogs`:** 既定 OFF。実 SSOS では OGS が Sabatier 用に `/ars/request_co2` を内部呼び出しするため。`true` にすると（設計提案含む）、同一 step で明示 `request_co2` と LoopMock の OGS Sabatier 減算が両方走り、**バッファなしの簡略 mock では CO₂ が二重減算されうる**。
 
@@ -116,8 +116,8 @@ step は 0-based（`0 .. steps-1`）。代表オペレータ `eclss_operator_{st
 simulation:
   steps: 8
   initial_co2_storage_kg: 1.5
-  initial_o2_storage_kg: 0.48
-  initial_product_water_l: 100.0
+  initial_o2_storage_kg: 8.0
+  initial_product_water_l: 80.0
 
 backend:
   kind: mock  # mock | plant_sim | ros2 — SSOS_ECLSS_BACKEND 環境変数でも上書き可
@@ -128,9 +128,10 @@ mock_dynamics:
   ogs_o2_gain_kg: 0.1
 
 thresholds:
-  co2_storage_high_kg: 1.5
-  co2_storage_critical_kg: 2.2
-  o2_storage_low_kg: 0.45
+  co2_storage_high_kg: 2.0
+  co2_storage_critical_kg: 8.0
+  o2_storage_low_kg: 6.0
+  o2_storage_critical_kg: 1.0
   product_water_low_l: 50.0
 
 # 既定はオフ。--inject-failures または inject_failures: true で有効化
@@ -200,8 +201,8 @@ llm:
 
 | 指標 | safe | warning | critical |
 | --- | --- | --- | --- |
-| CO₂ ストレージ (kg) | < high（1.5） | high 〜 critical 未満 | ≥ critical（2.2） |
-| O₂ ストレージ (kg) | > low（0.45） | low×0.75 〜 low | ≤ low×0.75（0.3375） |
+| CO₂ ストレージ (kg) | < high（2.0） | high 〜 critical 未満 | ≥ critical（8.0） |
+| O₂ ストレージ (kg) | > low（6.0） | critical 〜 low（1.0–6.0） | ≤ critical（1.0） |
 | 製品水 (L) | > low（50） | low×0.5 〜 low | ≤ low×0.5（25） |
 | `overall` | 全 safe | より悪い方 | より悪い方 |
 

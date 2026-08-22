@@ -61,6 +61,9 @@ def plant_sim_series(telemetry_rows: List[Dict[str, Any]]) -> List[Dict[str, Any
                 "total_h2_vented_kg": topic.get("total_h2_vented_kg"),
                 "total_ch4_vented_kg": topic.get("total_ch4_vented_kg"),
                 "total_wrs_brine_loss_l": topic.get("total_wrs_brine_loss_l"),
+                "crew_alive": topic.get("crew_alive"),
+                "crew_initial": topic.get("crew_initial"),
+                "crew_lost_total": topic.get("crew_lost_total"),
             }
         )
     return rows
@@ -100,7 +103,7 @@ def render_ssos_status_strip(
         "(final state after commands). Anomaly / stress below uses the worst band for the step."
     )
 
-    cols = st.columns(6)
+    cols = st.columns(7)
     with cols[0]:
         st.metric("Overall", current_health.get("overall", "—"))
     with cols[1]:
@@ -119,6 +122,17 @@ def render_ssos_status_strip(
             failures.append("WRS")
         st.metric("Subsystem failures", ", ".join(failures) if failures else "none")
     with cols[5]:
+        alive = topic.get("crew_alive") if topic else None
+        initial = topic.get("crew_initial") if topic else None
+        if isinstance(alive, int) or (isinstance(alive, float) and alive == int(alive)):
+            label = f"{int(alive)}"
+            if isinstance(initial, (int, float)):
+                label = f"{int(alive)} / {int(initial)}"
+            st.metric("Crew alive", label)
+        else:
+            remaining = summary.get("crew_remaining")
+            st.metric("Crew alive", remaining if remaining is not None else "—")
+    with cols[6]:
         o2_short = topic.get("total_o2_shortfall_kg") if topic else None
         water_short = topic.get("total_water_shortfall_l") if topic else None
         if isinstance(o2_short, (int, float)) or isinstance(water_short, (int, float)):
@@ -325,10 +339,13 @@ def render_plant_sim_panel(
     urine = [row.get("urine_buffer_l") for row in series]
     grey = [row.get("grey_water_collected_l") for row in series]
 
-    fig, axes = plt.subplots(2, 1, figsize=(10, 5.5), sharex=True)
+    fig, axes = plt.subplots(3, 1, figsize=(10, 7.5), sharex=True)
     axes[0].plot(steps, captured, label="Captured CO2 (kg)", color="#c44e52")
     axes[1].plot(steps, urine, label="Urine buffer (L)", color="#8172b3")
     axes[1].plot(steps, grey, label="Grey water (L)", color="#55a868")
+    crew_alive = [row.get("crew_alive") for row in series]
+    if any(val is not None for val in crew_alive):
+        axes[2].plot(steps, crew_alive, label="Crew alive", color="#4c72b0", marker="o")
     for ax in axes:
         ax.legend(loc="upper left")
         ax.grid(True, alpha=0.3)
@@ -347,7 +364,7 @@ def render_plant_sim_panel(
             return
     else:
         latest = series[-1]
-    cols = st.columns(4)
+    cols = st.columns(5)
     with cols[0]:
         val = latest.get("total_o2_shortfall_kg")
         st.metric("O2 shortfall (kg)", f"{val:.3f}" if isinstance(val, (int, float)) else "—")
@@ -360,6 +377,13 @@ def render_plant_sim_panel(
     with cols[3]:
         val = latest.get("total_wrs_brine_loss_l")
         st.metric("WRS brine loss (L)", f"{val:.3f}" if isinstance(val, (int, float)) else "—")
+    with cols[4]:
+        alive = latest.get("crew_alive")
+        lost = latest.get("crew_lost_total")
+        if isinstance(alive, (int, float)):
+            st.metric("Crew remaining", int(alive), delta=f"-{int(lost)}" if isinstance(lost, (int, float)) and lost else None)
+        else:
+            st.metric("Crew remaining", "—")
 
 
 def render_ssos_operational_timeline(
@@ -652,7 +676,7 @@ def render_ssos_design_proposals(
 
 
 def render_ssos_summary_highlights(summary: Dict[str, Any]) -> None:
-    cols = st.columns(4)
+    cols = st.columns(6)
     with cols[0]:
         st.metric("Backend", summary.get("backend", "—"))
     with cols[1]:
@@ -661,3 +685,7 @@ def render_ssos_summary_highlights(summary: Dict[str, Any]) -> None:
         st.metric("OGS step", summary.get("ogs_invoked_step", "—"))
     with cols[3]:
         st.metric("Ops commands", summary.get("operational_command_count", "—"))
+    with cols[4]:
+        st.metric("Crew remaining", summary.get("crew_remaining", "—"))
+    with cols[5]:
+        st.metric("Crew lost", summary.get("crew_lost", "—"))
