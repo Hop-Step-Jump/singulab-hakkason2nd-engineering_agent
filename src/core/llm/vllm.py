@@ -36,6 +36,11 @@ DEFAULT_MAX_MODEL_LEN = 32768
 _CHAT_TEMPLATE_OVERHEAD_TOKENS = 256
 # Conservative chars/token so we stay under the server cap without a tokenizer.
 _CHARS_PER_TOKEN = 3
+# When thinking is enabled, reserve part of max_tokens for the final answer so
+# Qwen3-style models do not exhaust the completion budget inside reasoning.
+# Minimum answer reserve; scales up on large self-hosted completion budgets.
+_DEFAULT_THINKING_ANSWER_RESERVE = 2048
+_MIN_THINKING_TOKEN_BUDGET = 256
 
 # Lab server: 8B is 6-way replicated (theoretical ~384); 32B is capped at 32.
 _MODEL_CONCURRENCY_DEFAULTS = [
@@ -126,6 +131,32 @@ def resolve_vllm_max_model_len() -> int:
     return DEFAULT_MAX_MODEL_LEN
 
 
+def _resolve_thinking_token_budget(
+    max_tokens: int,
+    *,
+    explicit: Optional[int] = None,
+    answer_reserve: Optional[int] = None,
+) -> int:
+    """Cap reasoning tokens so structured answers still fit in max_tokens."""
+    ceiling = max(1, int(max_tokens) - 1)
+    if explicit is not None:
+        budget = min(int(explicit), ceiling)
+    else:
+        if answer_reserve is None:
+            answer_reserve = max(_DEFAULT_THINKING_ANSWER_RESERVE, int(max_tokens) // 4)
+        reserve = min(int(answer_reserve), max(1, int(max_tokens) // 2))
+        budget = int(max_tokens) - reserve
+    return min(ceiling, max(_MIN_THINKING_TOKEN_BUDGET, budget))
+
+
+def _extract_vllm_message_text(message: Dict[str, Any]) -> str:
+    """Return assistant text from a vLLM chat completion message."""
+    content = message.get("content")
+    if content is not None and str(content).strip():
+        return str(content).strip()
+    return ""
+
+
 def _clamp_completion_tokens(max_tokens: int) -> int:
     """Leave at least one prompt token whenever the window is larger than overhead."""
     requested = max(1, int(max_tokens))
@@ -171,6 +202,7 @@ class VllmClient(LLMClient):
         min_p: float = 0.05,
         max_concurrency: int = -1,
         think: Optional[bool] = None,
+        thinking_token_budget: Optional[int] = None,
         api_timeout: Optional[int] = None,
         api_key: str = DEFAULT_API_KEY,
     ):
@@ -183,6 +215,7 @@ class VllmClient(LLMClient):
         self.repeat_penalty = repeat_penalty
         self.min_p = min_p
         self.think = think
+        self.thinking_token_budget = thinking_token_budget
         self.api_timeout = api_timeout or API_TIMEOUT
         self.api_key = api_key or DEFAULT_API_KEY
         self.api_url = f"{self.base_url}/chat/completions"
@@ -220,6 +253,11 @@ class VllmClient(LLMClient):
             # vLLM MTP / speculative decoding rejects min_p and logit_bias.
             if self.think is not None:
                 payload["chat_template_kwargs"] = {"enable_thinking": bool(self.think)}
+                if bool(self.think):
+                    payload["thinking_token_budget"] = _resolve_thinking_token_budget(
+                        max_tokens,
+                        explicit=self.thinking_token_budget,
+                    )
             response = self._session.post(
                 self.api_url,
                 json=payload,
@@ -228,8 +266,13 @@ class VllmClient(LLMClient):
             )
             response.raise_for_status()
             message = (response.json().get("choices") or [{}])[0].get("message") or {}
-            content = message.get("content") or ""
-            return str(content).strip()
+            content = _extract_vllm_message_text(message)
+            if not content and message.get("reasoning_content"):
+                logger.warning(
+                    "VllmClient received reasoning_content but empty content "
+                    "(thinking likely consumed the completion budget)"
+                )
+            return content
         except Exception as e:
             detail = ""
             resp = getattr(e, "response", None)

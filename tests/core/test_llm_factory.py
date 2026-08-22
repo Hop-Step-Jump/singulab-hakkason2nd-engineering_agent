@@ -92,6 +92,24 @@ def test_build_client_honors_max_concurrency(monkeypatch):
     assert client._max_concurrency == 48
 
 
+def test_build_client_vllm_passes_thinking_token_budget(monkeypatch):
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("VLLM_BASE_URL", raising=False)
+    monkeypatch.delenv("VLLM_MODEL", raising=False)
+    monkeypatch.delenv("VLLM_API_TIMEOUT", raising=False)
+    client = build_llm_client(
+        {
+            "provider": "vllm",
+            "think": True,
+            "thinking_token_budget": 640,
+            "max_tokens": 2048,
+        }
+    )
+    assert isinstance(client, VllmClient)
+    assert client.think is True
+    assert client.thinking_token_budget == 640
+
+
 def test_describe_llm_target_vllm(monkeypatch):
     monkeypatch.delenv("LLM_PROVIDER", raising=False)
     monkeypatch.delenv("VLLM_BASE_URL", raising=False)

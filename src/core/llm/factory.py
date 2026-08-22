@@ -61,6 +61,7 @@ def build_llm_client(llm_cfg: Optional[Dict[str, Any]] = None) -> LLMClient:
     repeat_penalty = float(cfg.get("repeat_penalty", 1.1))
     min_p = float(cfg.get("min_p", 0.05))
     think = cfg.get("think", False)
+    thinking_token_budget = cfg.get("thinking_token_budget")
     max_concurrency = int(cfg["max_concurrency"]) if cfg.get("max_concurrency") is not None else -1
 
     if provider == "vllm":
@@ -72,6 +73,11 @@ def build_llm_client(llm_cfg: Optional[Dict[str, Any]] = None) -> LLMClient:
             repeat_penalty=repeat_penalty,
             min_p=min_p,
             think=think,
+            thinking_token_budget=(
+                int(thinking_token_budget)
+                if thinking_token_budget is not None
+                else None
+            ),
             api_timeout=resolve_vllm_api_timeout(cfg),
             api_key=resolve_vllm_api_key(cfg),
             max_concurrency=max_concurrency,

@@ -9,7 +9,9 @@ from core.llm.vllm import (
     _CHAT_TEMPLATE_OVERHEAD_TOKENS,
     _CHARS_PER_TOKEN,
     _clamp_completion_tokens,
+    _extract_vllm_message_text,
     _fit_prompt_to_context,
+    _resolve_thinking_token_budget,
     looks_like_ollama_url,
     normalize_vllm_base_url,
     resolve_vllm_base_url,
@@ -187,3 +189,87 @@ def test_vllm_generate_clamps_output_when_window_is_tight(monkeypatch):
     prompt = captured["json"]["messages"][0]["content"]
     prompt_tokens = (len(prompt) + _CHARS_PER_TOKEN - 1) // _CHARS_PER_TOKEN
     assert max_tokens + prompt_tokens + _CHAT_TEMPLATE_OVERHEAD_TOKENS <= 1024
+
+
+def test_resolve_thinking_token_budget_reserves_answer_room():
+    assert _resolve_thinking_token_budget(2048) == 1024
+    assert _resolve_thinking_token_budget(8192) == 6144
+    assert _resolve_thinking_token_budget(16384) == 12288
+
+
+def test_resolve_thinking_token_budget_honors_explicit_cap():
+    assert _resolve_thinking_token_budget(8192, explicit=512) == 512
+
+
+def test_resolve_thinking_token_budget_never_exceeds_max_tokens():
+    for max_tokens in (50, 100, 200, 256, 300, 512, 2048, 8192):
+        default = _resolve_thinking_token_budget(max_tokens)
+        explicit = _resolve_thinking_token_budget(max_tokens, explicit=50)
+        assert 1 <= default <= max_tokens - 1
+        assert 1 <= explicit <= max_tokens - 1
+
+
+def test_extract_vllm_message_text_prefers_content():
+    assert _extract_vllm_message_text(
+        {"content": "  answer  ", "reasoning_content": "chain of thought"}
+    ) == "answer"
+    assert _extract_vllm_message_text(
+        {"content": "", "reasoning_content": "only thinking"}
+    ) == ""
+
+
+def test_vllm_generate_thinking_mode_sets_budget(monkeypatch):
+    captured = {}
+
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": '{"message":"ok","reasoning":"done","changes":[]}',
+                            "reasoning_content": "long reasoning",
+                        }
+                    }
+                ]
+            }
+
+    def fake_post(url, json, headers, timeout):
+        captured["json"] = json
+        return FakeResponse()
+
+    client = VllmClient(think=True, max_tokens=2048)
+    monkeypatch.setattr(client._session, "post", fake_post)
+    out = client.generate("design review")
+    assert out.startswith("{")
+    assert captured["json"]["chat_template_kwargs"] == {"enable_thinking": True}
+    assert captured["json"]["thinking_token_budget"] == 1024
+
+
+def test_vllm_generate_empty_content_with_reasoning_logs_warning(monkeypatch, caplog):
+    import logging
+
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "content": "",
+                            "reasoning_content": "thinking consumed the budget",
+                        }
+                    }
+                ]
+            }
+
+    client = VllmClient(think=True, max_tokens=2048)
+    monkeypatch.setattr(client._session, "post", lambda *args, **kwargs: FakeResponse())
+    with caplog.at_level(logging.WARNING):
+        assert client.generate("design review") == ""
+    assert "reasoning_content but empty content" in caplog.text
