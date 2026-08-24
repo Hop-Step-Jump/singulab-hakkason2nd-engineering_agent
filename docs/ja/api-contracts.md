@@ -36,6 +36,8 @@
 | `scenario_config.yaml` | この run で実際に使われたシナリオ設定（CLI overrides / `--apply-proposals` 適用後） |
 | `agents_config.yaml` | この run で実際に使われたエージェント設定（その側が `none` でないとき） |
 | `summary.json` | 実行サマリ |
+| `evaluation.json` | 物理ゲート、A3スコアカードの各軸、根拠メトリクス（`ssos_eclss_loop`） |
+| `evaluation.html` | `evaluation.json` の閲覧用スコアカード（`ssos_eclss_loop`） |
 | `provenance.jsonl` | One Piece 互換来歴（[one-piece-integration.md](one-piece-integration.md)） |
 
 ### design_proposals.json — 共通フィールド
@@ -535,6 +537,59 @@ ssos は actor（シミュレーション内）と design（事後）を分け�
 **ssos に無いフィールド**: `co2_ppm`、`eps_boost_applied_step`、`eps_telemetry.jsonl` 全体。
 
 `scenario_config_path` / `agents_config_path` は run ディレクトリ内の実効 YAML ダンプを指す。`apply_proposals_path` は `--apply-proposals` 使用時のみ。
+
+### evaluation.json — 決定論的評価スコアカード
+
+完全採点は `backend: plant_sim` かつ `plant_sim.survival.enabled: true` の run に限定する。
+`mock` / `ros2`、または survival 無効時にもファイルは生成するが、`status:
+not_applicable` と理由を記録し、満点扱いしない。
+
+評価順序:
+
+1. 配点外の `physics_gate`（有限値、非負在庫、O₂/CO₂/水台帳、操作の物理範囲）
+2. actor 残存 50 点
+3. TCL、生存環境軌道、資源余裕・回復を各 10 点
+4. actor 有効時のみ判断と装置応答を各 10 点
+
+actor 有効時は 100 点満点、`actor.mode: none` は判断・応答を除外して 80 点満点。
+物理ゲート失敗時は `status: invalid` とし、各軸と総合点を算出しない。適用不能軸の
+点を他軸へ再配分しない。
+
+```json
+{
+  "schema_version": "1.0",
+  "status": "scored",
+  "physics_gate": {
+    "passed": true,
+    "checks": [{"name": "mass_balance_ledgers", "passed": true}]
+  },
+  "scores": {
+    "total": 74.2,
+    "max_score": 80,
+    "axes": {
+      "actor_survival": {"score": 45.0, "max_score": 50},
+      "tcl": {"score": 8.0, "max_score": 10}
+    }
+  }
+}
+```
+
+TCL は本 run 内で観測された最初の `/eclss/events/crew_lost` の
+`raw_topics.plant_sim.simulation_time_s` から算出する。未来を外挿しない。喪失なしで
+`evaluation.tcl.reference_seconds` に到達すれば満点、到達前に run が終了した場合は
+`right_censored`（右打ち切り：失敗ではなく観測時間不足）として総合点を
+`incomplete` にする。
+
+同一 step に操作前と `"post_ops": true` の2行がある場合、軌道・終了値・TCLは
+post-ops 行を優先し、イベント発生時値と actor 判断は操作前行を使う。これにより
+曝露時間の二重計上と、actor 操作後の値を判断根拠へ混入することを防ぐ。
+
+`summary.json` は詳細を複製せず、次の索引だけを保持する:
+`evaluation_path`、`evaluation_html_path`、`evaluation_status`、`evaluation_score`、
+`evaluation_max_score`、`physics_gate_passed`。
+
+閲覧用の派生出力として、同内容を `evaluation.html` にも書き出す（正本は
+`evaluation.json`）。
 
 ### ROS2 トピック（SSOS 実 ECLSS）
 

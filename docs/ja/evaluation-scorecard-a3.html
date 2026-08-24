@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ECLSS 評価・検証スコアカード</title>
+  <style>
+    :root {
+      --ink: #17212b;
+      --muted: #566573;
+      --line: #b9c4cc;
+      --soft: #eef2f4;
+      --blue: #174f78;
+      --blue-soft: #e8f1f7;
+      --red: #8a2e2e;
+      --red-soft: #f8eaea;
+      --green: #296044;
+      --green-soft: #e9f3ed;
+      --gold: #765914;
+      --gold-soft: #f6f0df;
+    }
+
+    * { box-sizing: border-box; }
+
+    @page {
+      size: A3 landscape;
+      margin: 11mm;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans",
+        "Yu Gothic", "Noto Sans JP", sans-serif;
+      font-size: 12.5px;
+      line-height: 1.45;
+    }
+
+    main {
+      width: 100%;
+      max-width: 1500px;
+      margin: 0 auto;
+      padding: 24px 28px;
+    }
+
+    header {
+      display: grid;
+      grid-template-columns: 1.65fr 1fr;
+      gap: 24px;
+      align-items: end;
+      border-bottom: 3px solid var(--ink);
+      padding-bottom: 13px;
+      margin-bottom: 14px;
+    }
+
+    h1 {
+      margin: 0 0 5px;
+      font-size: 27px;
+      line-height: 1.2;
+      letter-spacing: .02em;
+    }
+
+    .subtitle {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .principle {
+      border-left: 5px solid var(--red);
+      background: var(--red-soft);
+      padding: 10px 13px;
+      font-weight: 700;
+    }
+
+    .principle small {
+      display: block;
+      color: var(--muted);
+      font-weight: 500;
+      margin-top: 2px;
+    }
+
+    h2 {
+      margin: 0 0 8px;
+      font-size: 16px;
+      line-height: 1.25;
+    }
+
+    h3 {
+      margin: 0 0 5px;
+      font-size: 14px;
+      line-height: 1.25;
+    }
+
+    p { margin: 0; }
+
+    .gate {
+      display: grid;
+      grid-template-columns: 190px 1fr 250px;
+      gap: 13px;
+      align-items: center;
+      border: 2px solid var(--red);
+      padding: 9px 12px;
+      margin-bottom: 14px;
+    }
+
+    .gate-title {
+      color: var(--red);
+      font-size: 16px;
+      font-weight: 800;
+    }
+
+    .gate-checks {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 15px;
+    }
+
+    .gate-checks span::before {
+      content: "□ ";
+      font-weight: 800;
+    }
+
+    .gate-result {
+      background: var(--red-soft);
+      padding: 7px 10px;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    .scorebar {
+      display: grid;
+      grid-template-columns: 5fr 1fr 1fr 1fr 1fr 1fr;
+      min-height: 58px;
+      margin-bottom: 14px;
+      border: 1px solid var(--line);
+    }
+
+    .scorebar > div {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px 11px;
+      border-right: 1px solid #fff;
+      color: #fff;
+      font-weight: 700;
+    }
+
+    .scorebar > div:last-child { border-right: 0; }
+    .s-actor { background: var(--blue); }
+    .s-a { background: #39759b; }
+    .s-b { background: var(--green); }
+    .s-c { background: #8b6b25; }
+    .s-d { background: #644f1f; }
+    .s-e { background: #4e3d18; }
+    .points { font-size: 21px; white-space: nowrap; }
+
+    .axes {
+      display: grid;
+      grid-template-columns: 1.15fr 1fr 1fr 1fr;
+      gap: 13px;
+      margin-bottom: 14px;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      padding: 11px 13px;
+      break-inside: avoid;
+    }
+
+    .card.actor {
+      border-top: 5px solid var(--blue);
+      background: var(--blue-soft);
+    }
+
+    .card.a { border-top: 5px solid #39759b; }
+    .card.b { border-top: 5px solid var(--green); }
+    .card.c { border-top: 5px solid var(--gold); }
+    .card.cd {
+      border-top: 5px solid var(--gold);
+      background: var(--gold-soft);
+    }
+
+    .tag {
+      display: inline-block;
+      padding: 1px 6px;
+      margin-left: 5px;
+      border: 1px solid currentColor;
+      font-size: 10px;
+      font-weight: 700;
+      vertical-align: 1px;
+    }
+
+    ul {
+      margin: 6px 0 0;
+      padding-left: 18px;
+    }
+
+    li { margin: 2px 0; }
+
+    .formula {
+      margin: 8px 0;
+      padding: 7px 9px;
+      background: #fff;
+      border-left: 4px solid var(--blue);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-weight: 700;
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 9px;
+      margin-top: 8px;
+    }
+
+    .mini {
+      background: #fff;
+      border: 1px solid #d7c995;
+      padding: 8px 9px;
+    }
+
+    .mini h3 { color: var(--gold); }
+
+    .bottom {
+      display: grid;
+      grid-template-columns: 1.1fr 1fr 1fr;
+      gap: 13px;
+    }
+
+    .mode {
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+    }
+
+    .mode.active { border-left: 5px solid var(--green); }
+    .mode.inactive { border-left: 5px solid var(--muted); }
+
+    .mode-line {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 5px;
+      font-weight: 700;
+    }
+
+    .note {
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .output-list {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2px 10px;
+      margin-top: 5px;
+    }
+
+    .output-list code {
+      font-size: 10.5px;
+      overflow-wrap: anywhere;
+    }
+
+    .scope {
+      background: var(--soft);
+      padding: 10px 12px;
+    }
+
+    .scope strong { color: var(--blue); }
+
+    footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      margin-top: 11px;
+      padding-top: 8px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 10.5px;
+    }
+
+    @media print {
+      body { font-size: 11.5px; }
+      main {
+        max-width: none;
+        padding: 0;
+      }
+      h1 { font-size: 24px; }
+    }
+
+    @media screen and (max-width: 900px) {
+      header, .axes, .bottom, .gate { grid-template-columns: 1fr; }
+      .scorebar { grid-template-columns: 1fr; }
+      .scorebar > div { border-bottom: 1px solid #fff; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>ECLSSシミュレーション 評価・検証スコアカード</h1>
+      <p class="subtitle">actorの残存 と 客観的な物理テレメトリに基づくラン評価</p>
+    </div>
+    <div class="principle">
+      最重要要求：物理法則を守ること
+      <small>得点より物理整合性を優先する。物理ゲート不合格のランは採点せず、検証無効とする。</small>
+    </div>
+  </header>
+
+  <section class="gate">
+    <div class="gate-title">物理整合性ゲート<br>配点外・必須</div>
+    <div class="gate-checks">
+      <span>質量保存・量論残差が許容内</span>
+      <span>在庫が非負</span>
+      <span>装置能力上限内</span>
+      <span>故障中に不自然な処理がない</span>
+      <span>操作と状態変化の符号が整合</span>
+      <span>無効な値 / 必須観測欠損がない</span>
+    </div>
+    <div class="gate-result">FAIL → 検証無効<br>総合点は算出しない</div>
+  </section>
+
+  <h1>配点構成と評価軸</h1>
+  <div class="scorebar" aria-label="配点構成">
+    <div class="s-actor"><span>actor残存</span><span class="points">50</span></div>
+    <div class="s-a"><span>A TCL</span><span class="points">10</span></div>
+    <div class="s-b"><span>B 生存環境</span><span class="points">10</span></div>
+    <div class="s-c"><span>C 資源余裕・回復</span><span class="points">10</span></div>
+    <div class="s-d"><span>D 判断</span><span class="points">10</span></div>
+    <div class="s-e"><span>E 応答</span><span class="points">10</span></div>
+  </div>
+
+  <section class="axes">
+    <article class="card actor">
+      <h2>actorの残存数 — 50点 <span class="tag">最優先成果</span></h2>
+      <p>シミュレーション終了時に残存するactorの割合を、そのまま得点化する。</p>
+      <div class="formula">50 × crew_remaining ÷ crew_initial</div>
+      <ul>
+        <li>基準：<strong>plant_sim + survival有効</strong>。乗員数とactor数を同一人物として同期する。</li>
+        <li>出力：<code>crew_initial</code>、<code>crew_remaining</code>、<code>crew_lost</code>、<code>crew_lost_by_cause</code>。</li>
+        <li>物理下限による喪失と、帯滞在ルールによる喪失を分離表示する。
+          <ul>
+            <li>物理下限：在庫量では次stepの需要を物理的に賄えない</li>
+            <li>帯滞在ルール：設定された危険帯への曝露時間が許容を超えた</li>
+          </ul>
+        </li>
+      </ul>
+    </article>
+
+    <article class="card a">
+      <h2>A. Time to Crew Loss（TCL）— 10点</h2>
+      <p>現在の故障状態を継続したとき、最初のcrew lossが発生するまでの時間を評価する。</p>
+      <div class="formula">TCL = 最初のcrew_lost時刻<br>得点 = 10 × min(TCL ÷ T_ref, 1)</div>
+      <ul>
+        <li><code>T_ref</code>（満点となる評価時間）と故障継続条件を採点前に固定する。</li>
+        <li>正本はイベントstepに対応する<code>simulation_time_s</code>。原因別TCLも保持する。</li>
+        <li><code>T_ref</code>まで喪失なし：10点。途中終了で喪失なし：右打ち切り（失敗ではなく観測時間不足）として採点保留。</li>
+      </ul>
+      <p class="note">既存ラン終了後の未来を外挿しない。必要なら同じ故障を維持して継続シミュレーションする。</p>
+    </article>
+
+    <article class="card b">
+      <h2>B. actorが置かれた生存環境 — 10点</h2>
+      <p>ラン全体を通して、actorがどの深さ・長さの危険環境に曝露されたかを評価する。</p>
+      <ul>
+        <li>CO₂：上限超過量 × 継続時間</li>
+        <li>O₂：下限不足量 × 継続時間</li>
+        <li>製品水：下限不足量 × 継続時間</li>
+        <li>safe / warning / critical の滞在step数</li>
+        <li>最長critical連続step数</li>
+      </ul>
+      <p class="note">瞬間値ではなく軌道を評価し、「短い軽微超過」と「深刻な長時間曝露」を区別する。</p>
+    </article>
+
+    <article class="card c">
+      <h2>C. 設計が提供した資源余裕と回復能力 — 10点</h2>
+      <p>設計・システムが最悪局面に耐え、終了時までに資源状態を回復できたかを評価する。</p>
+      <ul>
+        <li>CO₂：初期値、イベント発生時の値、最大値、終了値、安全上限までの余裕</li>
+        <li>O₂：初期値、イベント発生時の値、最小値、終了値、安全下限までの余裕</li>
+        <li>製品水：初期値、イベント発生時の値、最小値、終了値、安全下限までの余裕</li>
+        <li>終了時の safe / warning / critical</li>
+        <li>終了時未回復フラグ</li>
+      </ul>
+      <p class="note">イベントは評価対象の故障・異常の発生stepとし、同stepのactor操作前テレメトリを採用する。初期値との差も併記する。</p>
+    </article>
+  </section>
+
+  <section class="card cd">
+    <h2>actor操作が有効なランのみ加える評価 — 合計20点</h2>
+    <div class="split">
+      <div class="mini">
+        <h3>D. actorの操作判断 — 10点 <span class="tag">actor要因</span></h3>
+        <p>装置へ渡す前の「いつ・何を・どれだけ要求したか」を、観測値との対応で評価する。</p>
+        <ul>
+          <li>危険状態から適切な初回操作までの対応遅延</li>
+          <li>状態に対する操作種別・要求量の妥当性</li>
+          <li>故障・在庫不足を観測済みの無効操作、不要な重複操作</li>
+        </ul>
+      </div>
+      <div class="mini">
+        <h3>E. 設計・装置の物理応答 — 10点 <span class="tag">設計要因</span></h3>
+        <p>物理的に妥当な要求を受けた後、装置がどれだけ要求を実処理へ変換したかを評価する。</p>
+        <ul>
+          <li>妥当なコマンドの実行成功率、要求量／実処理量</li>
+          <li>操作前後の ΔCO₂・ΔO₂・Δ水、能力飽和</li>
+          <li>副作用、故障時の残存能力・代替経路</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="bottom">
+    <div>
+      <div class="mode inactive" style="margin-top:8px">
+        <h2>actor操作：未使用</h2>
+        <div class="mode-line"><span>50 + A10 + B10 + C10（D/Eは対象外）</span><span>80点満点</span></div>
+        <p class="note">対象：actor.mode = none。配点を自動再配分せず、適用可能点と満点を明示する。100点満点ランと総合点を直接比較しない。</p>
+      </div>
+      <div class="mode active">
+        <h2>actor操作：有効</h2>
+        <div class="mode-line"><span>50 + A10 + B10 + C10 + D10 + E10</span><span>100点満点</span></div>
+        <p class="note">対象：actor.mode = labeled_rule_base または llm。実際に装置へ適用された運用コマンドを評価する。</p>
+      </div>
+    </div>
+
+    <div class="scope">
+      <h2>採点の正本・派生出力</h2>
+      <div class="output-list">
+        <code>actor_survival.metrics</code>
+        <code>tcl.metrics.tcl_seconds</code>
+        <code>tcl.metrics.tcl_causes</code>
+        <code>trajectory.severity_auc_seconds</code>
+        <code>trajectory.band_steps</code>
+        <code>trajectory.longest_critical_streak</code>
+        <code>resource_recovery.resources</code>
+        <code>actor_decision.episodes</code>
+        <code>actor_decision.attempts</code>
+        <code>physical_response.operations</code>
+        <code>physics_gate.checks</code>
+        <code>scores.total / max_score</code>
+      </div>
+      <p class="note">詳細の正本は<code>evaluation.json</code>。run終了時に閲覧用の<code>evaluation.html</code>も書き出す。完全採点はplant_sim + survival有効時のみ。点数だけでなく単位、閾値、計算式を追跡可能にする。</p>
+    </div>
+
+    <div class="scope">
+      <h2>評価対象外・運用上の注意</h2>
+      <ul>
+        <li>LLMの自己評価、発言量、提案件数を成功指標にしない。</li>
+        <li>仮想検証の合格を、実機・物理世界での検証済みと表現しない。</li>
+        <li>backend、初期在庫、乗員数、故障条件、steps、閾値を評価結果に記録する。</li>
+      </ul>
+    </div>
+  </section>
+
+</main>
+</body>
+</html>

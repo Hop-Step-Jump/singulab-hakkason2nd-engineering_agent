@@ -37,6 +37,8 @@ Files present in both tracks:
 | `scenario_config.yaml` | Effective scenario config used for the run (after CLI overrides and `--apply-proposals`) |
 | `agents_config.yaml` | Effective agents config used for the run (when that side is not `none`) |
 | `summary.json` | Run summary |
+| `evaluation.json` | Physics gate, A3 scorecard axes, and evidence metrics (`ssos_eclss_loop`) |
+| `evaluation.html` | Browseable scorecard derived from `evaluation.json` (`ssos_eclss_loop`) |
 | `provenance.jsonl` | One Piece compatible lineage ([one-piece-integration.md](one-piece-integration.md)) |
 
 ### design_proposals.json — shared fields
@@ -538,6 +540,62 @@ Every step, **before** agent action. Snapshot of `ssos_graph` (includes `rewires
 **Fields not in ssos**: `co2_ppm`, `eps_boost_applied_step`, entire `eps_telemetry.jsonl`.
 
 `scenario_config_path` / `agents_config_path` point at the effective YAML dumps under the run directory. `apply_proposals_path` is present only when `--apply-proposals` was used.
+
+### evaluation.json — deterministic evaluation scorecard
+
+Full scoring applies only to runs with `backend: plant_sim` and
+`plant_sim.survival.enabled: true`. The file is still emitted for `mock`, `ros2`,
+and survival-disabled runs, but records `status: not_applicable` and a reason;
+such runs are never treated as full-score results.
+
+Evaluation order:
+
+1. Unscored `physics_gate` (finite values, non-negative inventories, O2/CO2/water
+   ledgers, and physical operation bounds)
+2. Actor survival: 50 points
+3. TCL, environment trajectory, and resource margin/recovery: 10 points each
+4. Actor decision and device response: 10 points each, only when actors are enabled
+
+Actor-enabled runs have a maximum of 100 points. `actor.mode: none` excludes
+decision and response, for a maximum of 80. Inapplicable points are not
+redistributed. A failed physics gate produces `status: invalid` and no axis or
+total score.
+
+```json
+{
+  "schema_version": "1.0",
+  "status": "scored",
+  "physics_gate": {
+    "passed": true,
+    "checks": [{"name": "mass_balance_ledgers", "passed": true}]
+  },
+  "scores": {
+    "total": 74.2,
+    "max_score": 80,
+    "axes": {
+      "actor_survival": {"score": 45.0, "max_score": 50},
+      "tcl": {"score": 8.0, "max_score": 10}
+    }
+  }
+}
+```
+
+TCL uses `raw_topics.plant_sim.simulation_time_s` at the first observed
+`/eclss/events/crew_lost` in the run. It never extrapolates beyond the run. No
+loss through `evaluation.tcl.reference_seconds` receives full credit; a run
+ending before that horizon is `right_censored`, leaving the total `incomplete`.
+
+When a step has both a pre-operation row and a `"post_ops": true` row,
+trajectory, terminal state, and TCL prefer post-ops. Event-at-step values and
+actor-decision evidence use the pre-operation row. This prevents duplicate
+exposure time and avoids judging an actor from state produced by its own action.
+
+`summary.json` stores only these evaluation index fields:
+`evaluation_path`, `evaluation_html_path`, `evaluation_status`, `evaluation_score`,
+`evaluation_max_score`, and `physics_gate_passed`.
+
+A browseable derived view is also written to `evaluation.html` (canonical detail
+remains `evaluation.json`).
 
 ### ROS2 topics (SSOS live ECLSS)
 

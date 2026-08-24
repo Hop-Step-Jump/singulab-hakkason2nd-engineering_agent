@@ -54,6 +54,7 @@ from scenario.ssos_eclss_loop.design_proposals import (
     load_design_proposals,
     write_design_proposals,
 )
+from scenario.ssos_eclss_loop.evaluation import write_evaluation
 from environment.ssos.eclss.ros2.graph_rewire import build_topic_remap
 from environment.ssos.eclss.ros2.telemetry import reset_rclpy_telemetry_reader
 
@@ -588,6 +589,25 @@ class SsosEclssLoopScenario(Scenario):
                 proposals_path = run_dir / "design_proposals.json"
                 write_design_proposals(proposals_path, proposals)
                 summary["design_proposals_path"] = str(proposals_path)
+
+        evaluation_path, evaluation_html_path, evaluation = write_evaluation(
+            run_dir,
+            scenario_config=config,
+            summary=summary,
+        )
+        evaluation_scores = evaluation.get("scores") or {}
+        summary.update(
+            {
+                "evaluation_path": str(evaluation_path),
+                "evaluation_html_path": str(evaluation_html_path),
+                "evaluation_status": evaluation.get("status"),
+                "evaluation_score": evaluation_scores.get("total"),
+                "evaluation_max_score": evaluation_scores.get("max_score"),
+                "physics_gate_passed": bool(
+                    (evaluation.get("physics_gate") or {}).get("passed", False)
+                ),
+            }
+        )
 
         log.write_summary(summary)
 

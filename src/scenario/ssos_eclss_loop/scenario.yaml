@@ -94,6 +94,41 @@ subsystem_failures:
     start_step: 30  # [-] inclusive, 0-based
     end_step: 40  # [-] exclusive
 
+# Deterministic post-run scorecard. These are verification requirements, not
+# plant physics and not labeled actor policy. Full scoring requires plant_sim
+# with survival enabled. Equal resource weights are explicit for auditability.
+evaluation:
+  enabled: true
+  tcl:
+    reference_seconds: 57600  # [s] acceptance horizon (16 h); no future extrapolation
+  trajectory:
+    resource_weights: {co2: 1.0, o2: 1.0, water: 1.0}
+    zero_score_mean_severity: 1.0  # [-] weighted mean severity that maps to 0/10
+  resource_recovery:
+    resource_weights: {co2: 1.0, o2: 1.0, water: 1.0}
+    terminal_weight: 0.5  # [-] remaining 0.5 is worst-to-final recovery
+  actor_decision:
+    max_latency_steps: 2  # [steps] zero latency gets full response quality
+    latency_weight: 0.5  # [-] remaining 0.5 is command validity
+    command_bounds:
+      air_revitalisation:
+        initial_co2_mass: [0.0, 8.0]  # [kg]
+      oxygen_generation:
+        input_water_mass: [0.0, 1.0]  # [kg]
+      water_recovery:
+        urine_volume: [0.0, 10.0]  # [L]
+      request_co2:
+        amount: [0.0, 8.0]  # [kg]
+      request_o2:
+        amount: [0.0, 8.0]  # [kg]
+  physical_response:
+    success_weight: 1.0
+    conversion_weight: 1.0
+    sign_weight: 1.0
+  physics_gate:
+    inventory_tolerance: 1.0e-9
+    ledger_tolerance: 2.0e-6  # [kg or L] permits documented chemistry residual
+
 agents:
   actor:
     mode: none  # none | labeled_rule_base | llm (CLI --actor-mode overrides)
