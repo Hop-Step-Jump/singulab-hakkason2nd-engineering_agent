@@ -595,7 +595,9 @@ exposure time and avoids judging an actor from state produced by its own action.
 `evaluation_max_score`, and `physics_gate_passed`.
 
 A browseable derived view is also written to `evaluation.html` (canonical detail
-remains `evaluation.json`).
+remains `evaluation.json`). Both include `run_conditions` with `run_id`, `backend`,
+`steps`, `inject_failures`, actor/design modes, and the active side's LLM
+`provider` / `model` / `base_url`.
 
 ### ROS2 topics (SSOS live ECLSS)
 

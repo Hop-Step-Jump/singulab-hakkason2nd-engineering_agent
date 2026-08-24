@@ -147,6 +147,13 @@ def test_plant_run_writes_scored_evaluation_and_summary_index(tmp_path: Path):
     html = (run_dir / "evaluation.html").read_text(encoding="utf-8")
     assert "ECLSSシミュレーション 評価結果" in html
     assert "物理整合性ゲート" in html
+    assert "シミュレーション条件" in html
+    assert "inject_failures" in html
+    assert evaluation["run_conditions"]["run_id"] == run_dir.name
+    assert evaluation["run_conditions"]["backend"] == "plant_sim"
+    assert evaluation["run_conditions"]["steps"] == 50
+    assert evaluation["run_conditions"]["inject_failures"] is False
+    assert evaluation["run_conditions"]["actor"]["mode"] == "none"
 
 
 def test_mock_run_writes_not_applicable_evaluation(tmp_path: Path):

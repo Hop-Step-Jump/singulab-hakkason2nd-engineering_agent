@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import html
 import json
-from typing import Any, Mapping, Sequence
+from typing import Any, List, Mapping, Sequence
 
 AXIS_META = {
     "actor_survival": {
@@ -80,6 +80,71 @@ def _fmt_score(value: Any) -> str:
 def _status_label(status: Any) -> str:
     key = str(status or "")
     return STATUS_LABELS.get(key, key or "—")
+
+
+def _display(value: Any, *, empty: str = "—") -> str:
+    if value is None or value == "":
+        return empty
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return _esc(value)
+
+
+def _side_condition_rows(label: str, side: Mapping[str, Any]) -> List[str]:
+    mode = side.get("mode") or "none"
+    rows = [f"<div><span>{_esc(label)}.mode</span><strong>{_display(mode)}</strong></div>"]
+    if side.get("llm_active"):
+        rows.extend(
+            [
+                f"<div><span>{_esc(label)}.llm.provider</span><strong>{_display(side.get('provider'))}</strong></div>",
+                f"<div><span>{_esc(label)}.llm.model</span><strong>{_display(side.get('model'))}</strong></div>",
+                f"<div><span>{_esc(label)}.llm.base_url</span><strong>{_display(side.get('base_url'))}</strong></div>",
+            ]
+        )
+    else:
+        configured = side.get("configured_model")
+        note = "未使用（mode ≠ llm）"
+        if configured:
+            note = f"{note} / configured={configured}"
+        rows.append(
+            f"<div><span>{_esc(label)}.llm.model</span><strong>{_esc(note)}</strong></div>"
+        )
+    return rows
+
+
+def _conditions_section(conditions: Mapping[str, Any]) -> str:
+    if not conditions:
+        return ""
+    inventory = (
+        conditions.get("initial_inventory")
+        if isinstance(conditions.get("initial_inventory"), Mapping)
+        else {}
+    )
+    actor = conditions.get("actor") if isinstance(conditions.get("actor"), Mapping) else {}
+    design = conditions.get("design") if isinstance(conditions.get("design"), Mapping) else {}
+    cells = [
+        f"<div><span>run_id</span><strong>{_display(conditions.get('run_id'))}</strong></div>",
+        f"<div><span>backend</span><strong>{_display(conditions.get('backend'))}</strong></div>",
+        f"<div><span>steps</span><strong>{_display(conditions.get('steps'))}</strong></div>",
+        f"<div><span>inject_failures</span><strong>{_display(conditions.get('inject_failures'))}</strong></div>",
+        f"<div><span>step_seconds</span><strong>{_display(conditions.get('step_seconds'))}</strong></div>",
+        f"<div><span>crew_size</span><strong>{_display(conditions.get('crew_size'))}</strong></div>",
+        f"<div><span>survival_enabled</span><strong>{_display(conditions.get('survival_enabled'))}</strong></div>",
+        f"<div><span>seed</span><strong>{_display(conditions.get('seed'))}</strong></div>",
+        f"<div><span>initial CO₂ kg</span><strong>{_display(inventory.get('co2_storage_kg'))}</strong></div>",
+        f"<div><span>initial O₂ kg</span><strong>{_display(inventory.get('o2_storage_kg'))}</strong></div>",
+        f"<div><span>initial water L</span><strong>{_display(inventory.get('product_water_l'))}</strong></div>",
+    ]
+    cells.extend(_side_condition_rows("actor", actor))
+    cells.extend(_side_condition_rows("design", design))
+    return (
+        "<section class=\"conditions\">"
+        "<h2>シミュレーション条件</h2>"
+        "<div class=\"conditions-grid\">"
+        + "".join(cells)
+        + "</div>"
+        "</section>"
+    )
 
 
 def _metric_preview(metrics: Any, *, limit: int = 8) -> str:
@@ -205,6 +270,9 @@ def render_evaluation_html(payload: Mapping[str, Any]) -> str:
     max_score = scores.get("max_score", applicability.get("applicable_max_score"))
     scenario = payload.get("scenario") or "ssos_eclss_loop"
     reason = applicability.get("reason")
+    conditions = (
+        payload.get("run_conditions") if isinstance(payload.get("run_conditions"), Mapping) else {}
+    )
 
     total_line = f"{_fmt_score(total)} / {_fmt_score(max_score)}"
     applicability_bits = [
@@ -288,6 +356,33 @@ def render_evaluation_html(payload: Mapping[str, Any]) -> str:
       padding: 10px 12px;
     }}
     .summary strong {{ display: block; font-size: 18px; margin-top: 2px; }}
+    .conditions {{
+      border: 1px solid var(--line);
+      padding: 12px 14px;
+      margin-bottom: 14px;
+      background: #fff;
+    }}
+    .conditions-grid {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 8px 12px;
+    }}
+    .conditions-grid div {{
+      border: 1px solid var(--soft);
+      background: var(--soft);
+      padding: 8px 10px;
+    }}
+    .conditions-grid span {{
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+    }}
+    .conditions-grid strong {{
+      display: block;
+      margin-top: 2px;
+      font-size: 13px;
+      overflow-wrap: anywhere;
+    }}
     .gate {{
       display: grid;
       grid-template-columns: 170px 1fr 220px;
@@ -383,6 +478,7 @@ def render_evaluation_html(payload: Mapping[str, Any]) -> str:
     <div>適用条件<strong>{' / '.join(applicability_bits)}</strong></div>
   </section>
 
+  {_conditions_section(conditions)}
   {_gate_section(gate, status)}
   {_scorebar(axes, max_score)}
   {_axis_cards(axes)}

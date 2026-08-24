@@ -589,7 +589,9 @@ post-ops 行を優先し、イベント発生時値と actor 判断は操作前�
 `evaluation_max_score`、`physics_gate_passed`。
 
 閲覧用の派生出力として、同内容を `evaluation.html` にも書き出す（正本は
-`evaluation.json`）。
+`evaluation.json`）。`evaluation.json` / HTML の `run_conditions` には
+`run_id`、`backend`、`steps`、`inject_failures`、`actor` / `design` の mode、および
+有効な側の LLM `provider` / `model` / `base_url` を記録する。
 
 ### ROS2 トピック（SSOS 実 ECLSS）
 

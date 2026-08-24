@@ -13,6 +13,8 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
+import yaml
+
 from scenario.ssos_eclss_loop.evaluation_html import render_evaluation_html
 from scenario.ssos_eclss_loop.health import build_effective_thresholds
 
@@ -79,6 +81,84 @@ def _plant_topic(row: Mapping[str, Any]) -> Dict[str, Any]:
         return {}
     plant = raw.get("plant_sim")
     return dict(plant) if isinstance(plant, Mapping) else {}
+
+
+def _load_yaml_mapping(path: Path) -> Dict[str, Any]:
+    if not path.exists():
+        return {}
+    value = yaml.safe_load(path.read_text(encoding="utf-8"))
+    return dict(value) if isinstance(value, Mapping) else {}
+
+
+def _llm_side_conditions(side_cfg: Mapping[str, Any], mode: str) -> Dict[str, Any]:
+    llm = side_cfg.get("llm") if isinstance(side_cfg.get("llm"), Mapping) else {}
+    active = mode == "llm"
+    return {
+        "mode": mode,
+        "llm_active": active,
+        "provider": llm.get("provider") if active else None,
+        "model": llm.get("model") if active else None,
+        "base_url": llm.get("base_url") if active else None,
+        "configured_model": llm.get("model"),
+        "configured_provider": llm.get("provider"),
+    }
+
+
+def build_run_conditions(
+    run_dir: Path,
+    *,
+    scenario_config: Mapping[str, Any],
+    summary: Mapping[str, Any],
+) -> Dict[str, Any]:
+    """Collect human-facing simulation conditions for reports."""
+
+    run_path = Path(run_dir)
+    agents_path = Path(str(summary.get("agents_config_path") or ""))
+    if not agents_path.is_file():
+        agents_path = run_path / "agents_config.yaml"
+    agents_config = _load_yaml_mapping(agents_path)
+
+    actor_mode = str(summary.get("actor_mode") or "none")
+    design_mode = str(
+        summary.get("design_mode")
+        or ((agents_config.get("design") or {}).get("mode"))
+        or actor_mode
+    )
+    actor_cfg = agents_config.get("actor") if isinstance(agents_config.get("actor"), Mapping) else {}
+    design_cfg = (
+        agents_config.get("design") if isinstance(agents_config.get("design"), Mapping) else {}
+    )
+    plant = (
+        scenario_config.get("plant_sim")
+        if isinstance(scenario_config.get("plant_sim"), Mapping)
+        else {}
+    )
+    plant_time = plant.get("time") if isinstance(plant.get("time"), Mapping) else {}
+    plant_crew = plant.get("crew") if isinstance(plant.get("crew"), Mapping) else {}
+    simulation = (
+        scenario_config.get("simulation")
+        if isinstance(scenario_config.get("simulation"), Mapping)
+        else {}
+    )
+
+    return {
+        "run_id": run_path.name,
+        "scenario": summary.get("scenario") or scenario_config.get("name"),
+        "backend": summary.get("backend"),
+        "steps": summary.get("steps") if summary.get("steps") is not None else simulation.get("steps"),
+        "inject_failures": bool(summary.get("inject_failures", False)),
+        "seed": summary.get("seed"),
+        "step_seconds": plant_time.get("step_seconds"),
+        "crew_size": plant_crew.get("size"),
+        "survival_enabled": bool((plant.get("survival") or {}).get("enabled", False)),
+        "actor": _llm_side_conditions(actor_cfg, actor_mode),
+        "design": _llm_side_conditions(design_cfg, design_mode),
+        "initial_inventory": {
+            "co2_storage_kg": simulation.get("initial_co2_storage_kg"),
+            "o2_storage_kg": simulation.get("initial_o2_storage_kg"),
+            "product_water_l": simulation.get("initial_product_water_l"),
+        },
+    }
 
 
 def select_telemetry_rows(
@@ -793,6 +873,9 @@ def evaluate_run(
         "schema_version": SCHEMA_VERSION,
         "scenario": summary.get("scenario"),
         "status": "not_applicable",
+        "run_conditions": build_run_conditions(
+            run_dir, scenario_config=scenario_config, summary=summary
+        ),
         "applicability": {
             "backend": backend,
             "survival_enabled": survival_enabled,
@@ -884,6 +967,7 @@ def write_evaluation(
 
 
 __all__ = [
+    "build_run_conditions",
     "evaluate_run",
     "select_telemetry_rows",
     "write_evaluation",
