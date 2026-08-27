@@ -37,7 +37,8 @@
 | `agents_config.yaml` | この run で実際に使われたエージェント設定（その側が `none` でないとき） |
 | `summary.json` | 実行サマリ |
 | `evaluation.json` | 物理ゲート、A3スコアカードの各軸、根拠メトリクス（`ssos_eclss_loop`） |
-| `evaluation.html` | `evaluation.json` の閲覧用スコアカード（`ssos_eclss_loop`） |
+| `evaluation.html`（各 run） | その run の閲覧用スコアカード（`ssos_eclss_loop`） |
+| `evaluation.html`（results 直下） | 全 run の評価ブラウザ（プルダウン切替・比較） |
 | `provenance.jsonl` | One Piece 互換来歴（[one-piece-integration.md](one-piece-integration.md)） |
 
 ### design_proposals.json — 共通フィールド
@@ -588,10 +589,14 @@ post-ops 行を優先し、イベント発生時値と actor 判断は操作前�
 `evaluation_path`、`evaluation_html_path`、`evaluation_status`、`evaluation_score`、
 `evaluation_max_score`、`physics_gate_passed`。
 
-閲覧用の派生出力として、同内容を `evaluation.html` にも書き出す（正本は
+閲覧用の派生出力として、同内容を各 run の `evaluation.html` にも書き出す（正本は
 `evaluation.json`）。`evaluation.json` / HTML の `run_conditions` には
 `run_id`、`backend`、`steps`、`inject_failures`、`actor` / `design` の mode、および
 有効な側の LLM `provider` / `model` / `base_url` を記録する。
+
+加えて results 直下の `evaluation.html`（評価ブラウザ）を更新する。ここから
+プルダウンで各 run を切り替え、別 run との点数比較ができる。ダッシュボードの
+View「Evaluation」からも同じブラウザを表示できる。
 
 ### ROS2 トピック（SSOS 実 ECLSS）
 

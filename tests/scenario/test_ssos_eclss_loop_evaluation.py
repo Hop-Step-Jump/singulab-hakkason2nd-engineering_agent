@@ -154,6 +154,59 @@ def test_plant_run_writes_scored_evaluation_and_summary_index(tmp_path: Path):
     assert evaluation["run_conditions"]["steps"] == 50
     assert evaluation["run_conditions"]["inject_failures"] is False
     assert evaluation["run_conditions"]["actor"]["mode"] == "none"
+    browser = (run_dir.parent / "evaluation.html").read_text(encoding="utf-8")
+    assert "ECLSS 評価ブラウザ" in browser
+    assert run_dir.name in browser
+    assert "別 run と比較" in browser
+    assert "../evaluation.html" in html
+
+
+def test_evaluation_browser_lists_multiple_runs_and_compare_controls(tmp_path: Path):
+    from scenario.ssos_eclss_loop.evaluation_browser import write_evaluation_browser
+
+    for run_id, total in (("e001", 40.0), ("e002", 55.0)):
+        run_dir = tmp_path / run_id
+        run_dir.mkdir()
+        (run_dir / "evaluation.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": "1.0",
+                    "scenario": "ssos_eclss_loop",
+                    "status": "scored",
+                    "run_conditions": {
+                        "run_id": run_id,
+                        "backend": "plant_sim",
+                        "steps": 50,
+                        "inject_failures": True,
+                        "actor": {"mode": "labeled_rule_base", "llm_active": False},
+                        "design": {
+                            "mode": "llm",
+                            "llm_active": True,
+                            "provider": "vllm",
+                            "model": "qwen3.8-27b-uncensored",
+                        },
+                    },
+                    "physics_gate": {"passed": True, "checks": []},
+                    "scores": {
+                        "total": total,
+                        "max_score": 100,
+                        "axes": {
+                            "actor_survival": {"score": total / 2, "max_score": 50},
+                        },
+                    },
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+    path = write_evaluation_browser(tmp_path, default_run_id="e002")
+    html = path.read_text(encoding="utf-8")
+    assert path.name == "evaluation.html"
+    assert "e001" in html and "e002" in html
+    assert "qwen3.8-27b-uncensored" in html
+    assert "compare-enabled" in html
+    assert '"e002"' in html
 
 
 def test_mock_run_writes_not_applicable_evaluation(tmp_path: Path):

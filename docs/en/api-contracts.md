@@ -38,7 +38,8 @@ Files present in both tracks:
 | `agents_config.yaml` | Effective agents config used for the run (when that side is not `none`) |
 | `summary.json` | Run summary |
 | `evaluation.json` | Physics gate, A3 scorecard axes, and evidence metrics (`ssos_eclss_loop`) |
-| `evaluation.html` | Browseable scorecard derived from `evaluation.json` (`ssos_eclss_loop`) |
+| `evaluation.html` (per run) | Browseable scorecard for that run (`ssos_eclss_loop`) |
+| `evaluation.html` (results root) | Multi-run evaluation browser (dropdown + compare) |
 | `provenance.jsonl` | One Piece compatible lineage ([one-piece-integration.md](one-piece-integration.md)) |
 
 ### design_proposals.json — shared fields
@@ -594,10 +595,15 @@ exposure time and avoids judging an actor from state produced by its own action.
 `evaluation_path`, `evaluation_html_path`, `evaluation_status`, `evaluation_score`,
 `evaluation_max_score`, and `physics_gate_passed`.
 
-A browseable derived view is also written to `evaluation.html` (canonical detail
-remains `evaluation.json`). Both include `run_conditions` with `run_id`, `backend`,
-`steps`, `inject_failures`, actor/design modes, and the active side's LLM
-`provider` / `model` / `base_url`.
+A browseable derived view is also written to each run's `evaluation.html`
+(canonical detail remains `evaluation.json`). Both include `run_conditions` with
+`run_id`, `backend`, `steps`, `inject_failures`, actor/design modes, and the
+active side's LLM `provider` / `model` / `base_url`.
+
+Writing an evaluation also refreshes the results-root `evaluation.html` browser,
+which lists every run with an `evaluation.json` and supports dropdown switching
+plus side-by-side score comparison. The dashboard View "Evaluation" embeds the
+same browser.
 
 ### ROS2 topics (SSOS live ECLSS)
 

@@ -1939,6 +1939,57 @@ def _render_run_comparison(
     )
 
 
+def _render_evaluation_panel(run_dir: Path, run_name: str) -> None:
+    evaluation = _read_json(run_dir / "evaluation.json")
+    if not evaluation:
+        st.info(f"`{run_name}` に evaluation.json がありません。")
+        return
+    scores = evaluation.get("scores") or {}
+    conditions = evaluation.get("run_conditions") or {}
+    gate = evaluation.get("physics_gate") or {}
+    st.markdown(f"**Evaluation — `{run_name}`**")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("status", str(evaluation.get("status") or "—"))
+    total = scores.get("total")
+    max_score = scores.get("max_score")
+    c2.metric(
+        "score",
+        "—" if total is None else f"{total} / {max_score}",
+    )
+    c3.metric("physics_gate", "PASS" if gate.get("passed") else "FAIL / N/A")
+    c4.metric("inject_failures", str(conditions.get("inject_failures")))
+    actor = conditions.get("actor") or {}
+    design = conditions.get("design") or {}
+    st.caption(
+        f"actor={actor.get('mode')} / design={design.get('mode')} / "
+        f"design.llm.model={design.get('model') or actor.get('model') or '—'}"
+    )
+    axes = scores.get("axes") or {}
+    if axes:
+        rows = []
+        for key, axis in axes.items():
+            if not isinstance(axis, dict):
+                continue
+            rows.append(
+                {
+                    "axis": key,
+                    "status": axis.get("status"),
+                    "score": axis.get("score"),
+                    "max": axis.get("max_score"),
+                }
+            )
+        st.dataframe(rows, use_container_width=True, hide_index=True)
+
+
+def _render_evaluation_browser_link() -> None:
+    browser = RESULTS_ROOT / "evaluation.html"
+    if browser.exists():
+        st.info(
+            "複数 run の切替・比較用 HTML: "
+            f"`{browser}` （ブラウザで直接開くか、下の Evaluation view を使用）"
+        )
+
+
 def main() -> None:
     st.set_page_config(page_title="ECLSS Day6 Dashboard", layout="wide")
     st.title("ECLSS Resilience Dashboard")
@@ -1955,7 +2006,7 @@ def main() -> None:
 
     view_mode = st.radio(
         "View",
-        options=["Overview", "Step replay"],
+        options=["Overview", "Step replay", "Evaluation"],
         horizontal=True,
         key="dashboard_view_mode",
     )
@@ -2016,6 +2067,22 @@ def main() -> None:
         _render_run_replay_view(primary_run)
         return
 
+    if view_mode == "Evaluation":
+        _render_evaluation_browser_link()
+        browser_path = RESULTS_ROOT / "evaluation.html"
+        if browser_path.exists():
+            components.html(
+                browser_path.read_text(encoding="utf-8"),
+                height=1100,
+                scrolling=True,
+            )
+        else:
+            st.warning(
+                f"{browser_path} がまだありません。evaluation 付き run を実行すると生成されます。"
+            )
+            _render_evaluation_panel(run_dir, selected_run_name)
+        return
+
     if compare_run_name and compare_run_dir:
         compare_run = RunViewData(
             run_dir=compare_run_dir,
@@ -2031,6 +2098,12 @@ def main() -> None:
         )
         _render_dual_overview(primary_run, compare_run)
         st.divider()
+        left, right = st.columns(2)
+        with left:
+            _render_evaluation_panel(run_dir, selected_run_name)
+        with right:
+            _render_evaluation_panel(compare_run_dir, compare_run_name)
+        st.divider()
         _render_run_comparison(
             primary_name=selected_run_name,
             primary_summary=summary,
@@ -2045,6 +2118,8 @@ def main() -> None:
         )
     else:
         _render_run_detail_view(primary_run)
+        st.divider()
+        _render_evaluation_panel(run_dir, selected_run_name)
 
 
 if __name__ == "__main__":

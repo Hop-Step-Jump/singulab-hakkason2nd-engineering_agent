@@ -464,6 +464,8 @@ def render_evaluation_html(payload: Mapping[str, Any]) -> str:
     <div>
       <h1>ECLSSシミュレーション 評価結果</h1>
       <p class="subtitle">{_esc(scenario)} — schema {_esc(payload.get('schema_version'))}</p>
+      <p class="note">複数 run の切替・比較は
+        <a href="../evaluation.html">../evaluation.html</a>（results 直下の評価ブラウザ）へ。</p>
     </div>
     <div class="principle">
       最重要要求：物理法則を守ること

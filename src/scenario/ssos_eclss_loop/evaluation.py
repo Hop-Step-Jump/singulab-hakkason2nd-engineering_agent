@@ -15,6 +15,7 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 import yaml
 
+from scenario.ssos_eclss_loop.evaluation_browser import write_evaluation_browser
 from scenario.ssos_eclss_loop.evaluation_html import render_evaluation_html
 from scenario.ssos_eclss_loop.health import build_effective_thresholds
 
@@ -963,6 +964,7 @@ def write_evaluation(
     payload = evaluate_run(run_dir, scenario_config=scenario_config, summary=summary)
     json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     html_path.write_text(render_evaluation_html(payload), encoding="utf-8")
+    write_evaluation_browser(run_path.parent, default_run_id=run_path.name)
     return json_path, html_path, payload
 
 
@@ -971,4 +973,5 @@ __all__ = [
     "evaluate_run",
     "select_telemetry_rows",
     "write_evaluation",
+    "write_evaluation_browser",
 ]
