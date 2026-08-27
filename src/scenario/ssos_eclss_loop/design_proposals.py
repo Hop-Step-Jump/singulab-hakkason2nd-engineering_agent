@@ -334,6 +334,7 @@ def build_design_proposals_from_run(
     summary: Dict[str, Any] | None = None,
     message: str = "SSOS ECLSS design profiles proposed from run outcomes.",
     baseline_graph: Dict[str, Any] | None = None,
+    prior_runs: List[Dict[str, Any]] | None = None,
 ) -> Dict[str, Any]:
     """Propose next-run design changes from run outcomes (not a no-op policy copy).
 
@@ -352,10 +353,41 @@ def build_design_proposals_from_run(
 
     ars_goal = dict(policy.get("ars_goal") or {})
     ogs_goal = dict(policy.get("ogs_goal") or {})
-    final_health = summary.get("final_health") or {}
+    final_health = dict(summary.get("final_health") or {})
     final_co2 = summary.get("final_co2_storage_kg")
     peak_co2 = summary.get("peak_co2_storage_kg")
     min_o2 = summary.get("min_o2_storage_kg")
+    # Fold prior loop runs into stress signals so proposals review full history.
+    for entry in prior_runs or []:
+        prior = entry.get("summary") or {}
+        try:
+            if prior.get("peak_co2_storage_kg") is not None:
+                prior_peak = float(prior["peak_co2_storage_kg"])
+                peak_co2 = prior_peak if peak_co2 is None else max(float(peak_co2), prior_peak)
+        except (TypeError, ValueError):
+            pass
+        try:
+            if prior.get("min_o2_storage_kg") is not None:
+                prior_min = float(prior["min_o2_storage_kg"])
+                min_o2 = prior_min if min_o2 is None else min(float(min_o2), prior_min)
+        except (TypeError, ValueError):
+            pass
+        prior_health = prior.get("final_health") or {}
+        if isinstance(prior_health, dict):
+            for key in ("co2_status", "o2_status", "water_status"):
+                status = str(prior_health.get(key, "")).lower()
+                current = str(final_health.get(key, "")).lower()
+                rank = {"safe": 0, "warning": 1, "critical": 2}
+                if rank.get(status, -1) > rank.get(current, -1):
+                    final_health[key] = prior_health.get(key)
+        try:
+            if prior.get("crew_remaining") is not None and prior.get("crew_initial") is not None:
+                if int(prior["crew_remaining"]) < int(prior["crew_initial"]):
+                    # Crew loss implies life-support stress even if final band recovered.
+                    if str(final_health.get("o2_status", "")).lower() not in {"warning", "critical"}:
+                        final_health["o2_status"] = "warning"
+        except (TypeError, ValueError):
+            pass
     co2_high = float(policy.get("co2_storage_high_kg", DEFAULT_CO2_STORAGE_HIGH_KG))
     o2_low = float(policy.get("o2_storage_low_kg", DEFAULT_O2_STORAGE_LOW_KG))
 
@@ -368,6 +400,11 @@ def build_design_proposals_from_run(
         str(final_health.get("o2_status", "")).lower() in {"warning", "critical"}
         or (min_o2 is not None and float(min_o2) <= o2_low)
     )
+    history_note = ""
+    if prior_runs:
+        history_note = f" Reviewed {len(prior_runs)} prior loop run(s)."
+    if history_note and message == "SSOS ECLSS design profiles proposed from run outcomes.":
+        message = message.rstrip(".") + f".{history_note}"
 
     if co2_stressed:
         co2_why = _co2_stress_why(

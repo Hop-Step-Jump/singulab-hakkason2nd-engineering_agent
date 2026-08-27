@@ -299,13 +299,15 @@ class ScrubberDegradationTeam(Team):
         self,
         sim: SimulatorProtocol,
         summary: Dict[str, Any],
+        prior_runs: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         baseline = sim.get_design_state().to_dict()
         steps = int(summary.get("steps", 0))
         rep = self.team_cfg.action_rep_id(steps)
+        history = list(prior_runs or [])
         if self.llm_mode:
-            return self._llm_post_run_design_proposal(summary, baseline, rep)
-        return self._rule_post_run_design_proposal(summary, baseline, rep)
+            return self._llm_post_run_design_proposal(summary, baseline, rep, prior_runs=history)
+        return self._rule_post_run_design_proposal(summary, baseline, rep, prior_runs=history)
 
     async def _llm_deliberation_turn(
         self,
@@ -448,6 +450,7 @@ class ScrubberDegradationTeam(Team):
         summary: Dict[str, Any],
         baseline: Dict[str, Any],
         rep: str,
+        prior_runs: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         steps = int(summary.get("steps", 0))
         final_health_raw = summary.get("final_health") or {}
@@ -462,6 +465,7 @@ class ScrubberDegradationTeam(Team):
             final_health,
             self.memory_store.discourse.recent(),
             baseline,
+            prior_runs=prior_runs or [],
         )
         contract = design_proposal_contract()
         agent = self.agents[rep]
@@ -507,10 +511,19 @@ class ScrubberDegradationTeam(Team):
         summary: Dict[str, Any],
         baseline: Dict[str, Any],
         rep: str,
+        prior_runs: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         co2_threshold = float(self.policy.get("co2_recovery_ppm", CO2_RECOVERY_PPM))
         peak = float(summary.get("peak_co2_ppm", 0))
         anomaly_seen = bool(summary.get("anomaly_seen"))
+        # Review prior loop peaks/anomalies so proposals reflect the full history.
+        for entry in prior_runs or []:
+            prior_summary = entry.get("summary") or {}
+            try:
+                peak = max(peak, float(prior_summary.get("peak_co2_ppm") or 0))
+            except (TypeError, ValueError):
+                pass
+            anomaly_seen = anomaly_seen or bool(prior_summary.get("anomaly_seen"))
         if peak < co2_threshold and not anomaly_seen:
             return {
                 "proposed_by": rep,
@@ -518,7 +531,8 @@ class ScrubberDegradationTeam(Team):
                 "message": "No structural topology changes recommended after this run.",
                 "reasoning": (
                     f"Peak CO2 {peak:.0f} ppm stayed below recovery threshold "
-                    f"{co2_threshold:.0f} ppm with no sustained anomaly."
+                    f"{co2_threshold:.0f} ppm with no sustained anomaly "
+                    f"(reviewed {len(prior_runs or [])} prior loop run(s))."
                 ),
                 "changes": [],
                 "baseline_topology": baseline.get("topology", {}),
@@ -535,13 +549,36 @@ class ScrubberDegradationTeam(Team):
                 },
             }
         ]
+        # Skip duplicate bypass if already present on the seeded baseline.
+        topo = baseline.get("topology") or {}
+        edges = topo.get("edges") or []
+        node_a = changes[0]["payload"]["node_a"]
+        node_b = changes[0]["payload"]["node_b"]
+        kind = changes[0]["payload"]["kind"]
+        already = any(
+            e.get("source") == node_a and e.get("target") == node_b and e.get("kind") == kind
+            for e in edges
+            if isinstance(e, dict)
+        )
+        if already:
+            return {
+                "proposed_by": rep,
+                "decision_source": "rule",
+                "message": "Bypass already present; no further topology change.",
+                "reasoning": (
+                    f"Reviewed current run and {len(prior_runs or [])} prior loop run(s); "
+                    "bypass edge is already in the design state."
+                ),
+                "changes": [],
+                "baseline_topology": baseline.get("topology", {}),
+            }
         return {
             "proposed_by": rep,
             "decision_source": "rule",
             "message": "Propose permanent bypass plumbing between manifold and scrubber.",
             "reasoning": (
-                "Repeated anomaly and high CO2 during the run; temporary ops may be insufficient "
-                "for long-term resilience."
+                "Repeated anomaly and high CO2 across the current and prior loop runs; "
+                "temporary ops may be insufficient for long-term resilience."
             ),
             "changes": changes,
             "baseline_topology": baseline.get("topology", {}),
@@ -755,7 +792,10 @@ def build_llm_post_run_situation(
     final_health: HealthMetrics,
     discourse: List[AgentMessage],
     baseline: Dict[str, Any],
+    prior_runs: Optional[List[Dict[str, Any]]] = None,
 ) -> str:
+    from scenario.jobs.design_history import format_prior_runs_for_prompt
+
     steps = int(summary.get("steps", 0))
     telemetry_summary = (
         f"steps={steps}, peak_co2_ppm={summary.get('peak_co2_ppm')}, "
@@ -774,9 +814,12 @@ def build_llm_post_run_situation(
         f"- {msg.from_role}: {msg.message}" for msg in discourse[-8:]
     ) or "(none)"
     topology = json.dumps(baseline.get("topology", {}), ensure_ascii=False)
+    prior_block = format_prior_runs_for_prompt(list(prior_runs or []))
     return (
-        "Post-run design review. Simulation complete.\n\n"
-        f"### Telemetry\n{telemetry_summary}\n\n"
+        "Post-run design review. Simulation complete. "
+        "Review prior loop runs and the current run before proposing changes.\n\n"
+        f"### Prior loop runs\n{prior_block}\n\n"
+        f"### Telemetry (current run)\n{telemetry_summary}\n\n"
         f"### World state\n{world_state}\n\n"
         f"### Team discourse (recent)\n{discourse_lines}\n\n"
         f"Baseline topology at run end: {topology}"

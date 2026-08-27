@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import yaml
 
@@ -27,6 +27,11 @@ from scenario.runner import (
     build_simulator,
     scenario_config_path,
     write_effective_configs,
+)
+from scenario.scrubber_degradation.design_proposals import (
+    apply_design_proposals,
+    apply_topology_changes_to_simulator,
+    load_design_proposals,
 )
 
 logger = logging.getLogger(__name__)
@@ -79,10 +84,24 @@ class ScrubberDegradationScenario(Scenario):
         output_dir: Optional[Path] = None,
         overrides: Optional[Dict[str, Any]] = None,
         recreate_output: bool = True,
+        apply_proposals_path: Optional[Path] = None,
+        apply_proposals_paths: Optional[List[Path]] = None,
         run_id: Optional[str] = None,
         results_root: Optional[Path] = None,
+        design_history: Optional[List[Dict[str, Any]]] = None,
     ) -> Path:
+        # Load order: scenario.yaml (+ overrides) → cumulative --apply-proposals.
         config = self.load_config(overrides)
+        proposal_paths = list(apply_proposals_paths or [])
+        if not proposal_paths and apply_proposals_path is not None:
+            proposal_paths = [Path(apply_proposals_path)]
+        applied_proposals_path: Optional[Path] = None
+        topology_changes: List[Dict[str, Any]] = []
+        for path in proposal_paths:
+            proposals = load_design_proposals(path)
+            config, topo = apply_design_proposals(config, proposals)
+            topology_changes.extend(topo)
+            applied_proposals_path = Path(path)
         agents_config = load_agents_config(self.name, config)
         sim_cfg = config.get("simulation", {})
         steps = int(sim_cfg.get("steps", 50))
@@ -104,6 +123,7 @@ class ScrubberDegradationScenario(Scenario):
         )
 
         sim = self.build_simulator(config)
+        apply_topology_changes_to_simulator(sim, topology_changes)
         team = self.build_team(config)
         log = EventLog(run_dir)
 
@@ -218,19 +238,24 @@ class ScrubberDegradationScenario(Scenario):
             ),
             **config_paths,
         }
+        if applied_proposals_path is not None:
+            summary["apply_proposals_path"] = str(applied_proposals_path)
 
         design_proposals_path = run_dir / "design_proposals.json"
         if isinstance(team, ScrubberDegradationTeam):
             summary["team_count"] = team.team_cfg.count
             summary["agent_ids"] = list(team.team_cfg.agent_ids)
             summary["archetypes"] = {aid: lens for aid, lens in team.team_cfg.archetypes}
-            design_proposal = team.propose_post_run_design(sim, summary)
+            design_proposal = team.propose_post_run_design(
+                sim, summary, prior_runs=design_history or []
+            )
             design_proposals_path.write_text(
                 json.dumps(design_proposal, ensure_ascii=False, indent=2),
                 encoding="utf-8",
             )
             summary["design_proposal_count"] = len(design_proposal.get("changes", []))
             summary["design_proposals_path"] = str(design_proposals_path)
+            summary["design_history_runs"] = len(design_history or [])
 
         log.write_summary(summary)
 

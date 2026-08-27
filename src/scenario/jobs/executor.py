@@ -27,6 +27,7 @@ def execute_run(spec: RunSpec) -> RunResult:
     run_dir: Path | None = None
 
     try:
+        proposal_paths = _resolve_proposal_paths(spec)
         if spec.scenario == "ssos_eclss_loop":
             from scenario.ssos_eclss_loop.scenario_run import SsosEclssLoopScenario
 
@@ -35,8 +36,23 @@ def execute_run(spec: RunSpec) -> RunResult:
                 overrides=overrides,
                 recreate_output=spec.recreate_output,
                 apply_proposals_path=spec.apply_proposals_path,
+                apply_proposals_paths=proposal_paths or None,
                 run_id=spec.run_id,
                 results_root=spec.results_root,
+                design_history=spec.design_history,
+            )
+        elif spec.scenario == "scrubber_degradation":
+            from scenario.scrubber_degradation.scenario_run import ScrubberDegradationScenario
+
+            run_dir = ScrubberDegradationScenario().run(
+                output_dir=spec.output_dir,
+                overrides=overrides,
+                recreate_output=spec.recreate_output,
+                apply_proposals_path=spec.apply_proposals_path,
+                apply_proposals_paths=proposal_paths or None,
+                run_id=spec.run_id,
+                results_root=spec.results_root,
+                design_history=spec.design_history,
             )
         else:
             run_dir = scenario.run(
@@ -69,6 +85,14 @@ def execute_run(spec: RunSpec) -> RunResult:
         duration_s=duration_s,
         exit_code=0,
     )
+
+
+def _resolve_proposal_paths(spec: RunSpec) -> list[Path]:
+    if spec.apply_proposals_paths:
+        return list(spec.apply_proposals_paths)
+    if spec.apply_proposals_path is not None:
+        return [spec.apply_proposals_path]
+    return []
 
 
 def _teardown_rclpy_telemetry() -> None:

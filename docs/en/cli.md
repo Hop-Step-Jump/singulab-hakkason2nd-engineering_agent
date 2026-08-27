@@ -30,6 +30,7 @@ To match the physics-only baseline in `scenario.yaml`, pass `--agents-mode none`
 | Command | Purpose |
 | --- | --- |
 | `ea run [SCENARIO]` | Run one simulation |
+| `ea loop [SCENARIO]` | Multi-run design→verify (`e002loop-runXX`, max 15, stop at crew=50) |
 | `ea scenarios` | List available scenarios |
 | `ea results [RUN_ID]` | List recent runs or show one `summary.json` |
 | `ea doctor` | Check Python 3.11+, dependencies, Docker/SSOS mounts, Ollama, and vLLM |

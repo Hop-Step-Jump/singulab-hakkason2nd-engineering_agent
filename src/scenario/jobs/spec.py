@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 
 @dataclass
@@ -20,6 +20,10 @@ class RunSpec:
     recreate_output: bool = True
     seed: Optional[int] = None
     apply_proposals_path: Optional[Path] = None
+    # When set, applied in order after (or instead of) the single path.
+    apply_proposals_paths: Optional[List[Path]] = None
+    # Prior loop digests for post-run designers (see jobs.design_history).
+    design_history: Optional[List[Dict[str, Any]]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         payload = asdict(self)
@@ -27,6 +31,9 @@ class RunSpec:
             value = payload.get(key)
             if value is not None:
                 payload[key] = str(value)
+        paths = payload.get("apply_proposals_paths")
+        if paths is not None:
+            payload["apply_proposals_paths"] = [str(p) for p in paths]
         return payload
 
     @classmethod
@@ -35,6 +42,8 @@ class RunSpec:
         for key in ("output_dir", "results_root", "apply_proposals_path"):
             if data.get(key) is not None:
                 data[key] = Path(data[key])
+        if data.get("apply_proposals_paths") is not None:
+            data["apply_proposals_paths"] = [Path(p) for p in data["apply_proposals_paths"]]
         return cls(**data)
 
     def to_json(self) -> str:

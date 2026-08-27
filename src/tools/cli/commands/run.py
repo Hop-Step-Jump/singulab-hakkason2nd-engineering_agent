@@ -66,7 +66,7 @@ def run(
     apply_proposals: Optional[Path] = typer.Option(
         None,
         "--apply-proposals",
-        help="Apply design_proposals.json before running (ssos_eclss_loop).",
+        help="Apply design_proposals.json before running (ssos_eclss_loop or scrubber_degradation).",
     ),
     llm_provider: Optional[str] = typer.Option(
         None,

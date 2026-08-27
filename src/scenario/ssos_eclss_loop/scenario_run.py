@@ -10,7 +10,7 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import yaml
 
@@ -343,8 +343,10 @@ class SsosEclssLoopScenario(Scenario):
         overrides: Optional[Dict[str, Any]] = None,
         recreate_output: bool = True,
         apply_proposals_path: Optional[Path] = None,
+        apply_proposals_paths: Optional[List[Path]] = None,
         run_id: Optional[str] = None,
         results_root: Optional[Path] = None,
+        design_history: Optional[List[Dict[str, Any]]] = None,
     ) -> Path:
         # Load order (before any simulation step):
         # 1) scenario.yaml (+ CLI overrides)
@@ -352,10 +354,13 @@ class SsosEclssLoopScenario(Scenario):
         # 3) agents.yaml ⊕ scenario.agents, then labeled policy from thresholds
         config = self.load_config(overrides)
         applied_proposals_path: Optional[Path] = None
-        if apply_proposals_path is not None:
-            proposals = load_design_proposals(apply_proposals_path)
+        proposal_paths = list(apply_proposals_paths or [])
+        if not proposal_paths and apply_proposals_path is not None:
+            proposal_paths = [Path(apply_proposals_path)]
+        for path in proposal_paths:
+            proposals = load_design_proposals(path)
             config = apply_design_proposals(config, proposals)
-            applied_proposals_path = Path(apply_proposals_path)
+            applied_proposals_path = Path(path)
         thresholds = config.get("thresholds", {}) or {}
         agents_config = load_agents_config(self.name, config)
         if agents_config:
@@ -572,6 +577,7 @@ class SsosEclssLoopScenario(Scenario):
                     baseline_graph=dict(config.get("ssos_graph") or {}),
                     policy=dict(actor_cfg.get("policy") or {}),
                     actor_snapshot=actor_snapshot_from_team(team) if team is not None else None,
+                    prior_runs=list(design_history or []),
                 )
             )
             # L8/B: only persist when there is at least one change so
@@ -580,6 +586,7 @@ class SsosEclssLoopScenario(Scenario):
             summary["design_proposal_count"] = change_count
             summary["design_proposed_by"] = proposals.get("proposed_by")
             summary["design_decision_source"] = proposals.get("decision_source")
+            summary["design_history_runs"] = len(design_history or [])
             for msg in proposals.pop("deliberation_messages", []) or []:
                 if isinstance(msg, dict):
                     log.append("messages", msg)

@@ -30,6 +30,7 @@ ea run
 | コマンド | 用途 |
 | --- | --- |
 | `ea run [SCENARIO]` | 1回シミュレーション実行 |
+| `ea loop [SCENARIO]` | 設計→検証の多周回（`e002loop-runXX`、最大15、crew=50で停止） |
 | `ea scenarios` | 利用可能なシナリオ一覧 |
 | `ea results [RUN_ID]` | 直近 run 一覧、または `summary.json` 表示 |
 | `ea doctor` | Python 3.11+・依存関係・Docker/SSOS マウント・Ollama・vLLM の確認 |

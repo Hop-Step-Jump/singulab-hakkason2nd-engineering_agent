@@ -43,6 +43,7 @@ class DesignReviewBundle:
     baseline_graph: Dict[str, Any]
     policy: Dict[str, Any]
     actor_snapshot: Optional[ActorTeamSnapshot] = None
+    prior_runs: List[Dict[str, Any]] = field(default_factory=list)
 
 
 def post_run_message_step(summary: Dict[str, Any]) -> int:
@@ -95,6 +96,7 @@ class PostRunDesignAgent:
             policy=bundle.policy,
             summary=bundle.summary,
             baseline_graph=baseline_graph or None,
+            prior_runs=bundle.prior_runs,
         )
         proposals["deliberation_messages"] = [
             AgentMessage(
@@ -185,6 +187,7 @@ class PostRunDesignAgent:
                 summary=bundle.summary,
                 message="LLM response could not be parsed; fell back to rule proposals.",
                 baseline_graph=baseline_graph or None,
+                prior_runs=bundle.prior_runs,
             )
             fallback["reasoning"] = "LLM response could not be parsed."
             fallback["deliberation_messages"] = [
@@ -289,6 +292,8 @@ def parse_llm_design_proposals(raw_changes: Any) -> Tuple[List[Dict[str, Any]], 
 
 
 def build_llm_post_run_situation(bundle: DesignReviewBundle) -> str:
+    from scenario.jobs.design_history import format_prior_runs_for_prompt
+
     summary = bundle.summary
     sim = bundle.scenario_config.get("simulation") or {}
     thresholds = bundle.scenario_config.get("thresholds") or {}
@@ -298,6 +303,8 @@ def build_llm_post_run_situation(bundle: DesignReviewBundle) -> str:
         f"min_o2_storage_kg={summary.get('min_o2_storage_kg')}, "
         f"final_co2_storage_kg={summary.get('final_co2_storage_kg')}, "
         f"final_o2_storage_kg={summary.get('final_o2_storage_kg')}, "
+        f"crew_initial={summary.get('crew_initial')}, "
+        f"crew_remaining={summary.get('crew_remaining')}, "
         f"operational_command_count={summary.get('operational_command_count')}, "
         f"ars_invoked_step={summary.get('ars_invoked_step')}, "
         f"ogs_invoked_step={summary.get('ogs_invoked_step')}, "
@@ -317,14 +324,17 @@ def build_llm_post_run_situation(bundle: DesignReviewBundle) -> str:
         "\n".join(f"- {msg.from_role}: {msg.message}" for msg in discourse[-8:]) or "(none)"
     )
     graph = json.dumps(bundle.baseline_graph, ensure_ascii=False)
+    prior_block = format_prior_runs_for_prompt(list(bundle.prior_runs or []))
     return (
         "Post-run SSOS graph design review. Simulation complete. "
+        "Review prior loop runs and the current run before proposing changes. "
         "Do not judge verification pass/fail. "
         "One representative emits changes; include as many proposals as needed "
         "(no count cap).\n\n"
+        f"### Prior loop runs\n{prior_block}\n\n"
         f"### Initial conditions\n{initials}\n\n"
         f"### Verification requirement stubs (context only)\n{req_stubs}\n\n"
-        f"### Telemetry\n{telemetry_summary}\n\n"
+        f"### Telemetry (current run)\n{telemetry_summary}\n\n"
         f"### World state\n{final_health}\n\n"
         f"### Actor final state\n{actor_state}\n\n"
         f"### Actor discourse (recent)\n{discourse_lines}\n\n"
