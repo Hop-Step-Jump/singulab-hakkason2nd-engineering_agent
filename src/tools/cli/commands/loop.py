@@ -66,7 +66,11 @@ def loop(
     loop_id: str = typer.Option(
         DEFAULT_LOOP_ID,
         "--loop-id",
-        help="Prefix for run ids (e002loop-run01, …).",
+        "--run-id",
+        help=(
+            "Prefix for result directories and run ids "
+            "(e.g. e003loop → e003loop-run01). Alias: --run-id."
+        ),
     ),
     max_actions_per_step: int = typer.Option(
         DEFAULT_MAX_ACTIONS_PER_STEP,
@@ -158,6 +162,7 @@ def loop(
     if not quiet and not json_output:
         console.print(
             f"[cyan]loop[/cyan] {scenario_name}  "
+            f"loop_id={loop_id}  "
             f"max_loops={max_loops}  target_crew={target_crew}  "
             f"run_ids={spec.run_id_for(1)}…{spec.run_id_for(max_loops)}  "
             f"max_actions_per_step={max_actions_per_step}"
