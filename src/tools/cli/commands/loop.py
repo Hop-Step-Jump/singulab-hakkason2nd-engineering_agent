@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import typer
 
 from scenario.jobs.loop import (
-    DEFAULT_LOOP_ID,
     DEFAULT_MAX_ACTIONS_PER_STEP,
     DEFAULT_MAX_LOOPS,
     DEFAULT_TARGET_CREW,
@@ -70,9 +69,9 @@ def loop(
         "--loop-id",
         "--run-id",
         help=(
-            "Prefix for result directories and run ids "
-            "(e.g. e003loop → e003loop-run01 … e003loop-run15). "
-            "Alias: --run-id. Default: e002loop (or EA_LOOP_ID)."
+            "REQUIRED. Prefix for result dirs "
+            "(e003loop → e003loop-run01 .. e003loop-run15). "
+            "Alias: --run-id. Or set EA_LOOP_ID / --set loop_id=e003loop."
         ),
     ),
     max_actions_per_step: int = typer.Option(
@@ -118,6 +117,8 @@ def loop(
         print_error("--max-actions-per-step must be >= 1")
         raise typer.Exit(exit_codes.USER_ERROR)
 
+    set_loop_id, filtered_sets = _extract_loop_id_from_sets(set_values)
+
     try:
         overrides = run_cmd._build_overrides(
             scenario_name=scenario_name,
@@ -129,7 +130,7 @@ def loop(
             inject_failures=inject_failures,
             llm_provider=llm_provider,
             llm_model=llm_model,
-            set_values=set_values,
+            set_values=filtered_sets,
             override_file=override_file,
         )
         overrides = run_cmd._apply_cli_defaults(scenario_name, overrides)
@@ -151,7 +152,24 @@ def loop(
         overrides = dict(overrides or {})
         overrides["agents"] = agents
 
-    resolved_loop_id, loop_id_source = _resolve_loop_id(loop_id)
+    try:
+        resolved_loop_id, loop_id_source = _resolve_loop_id(loop_id, set_loop_id)
+    except ValueError as exc:
+        print_error(
+            str(exc),
+            hint=(
+                "Example:\n"
+                "  python3 -m tools.cli loop ssos_eclss_loop \\\n"
+                "    --backend plant_sim \\\n"
+                "    --actor-mode labeled_rule_base \\\n"
+                "    --design-mode labeled_rule_base \\\n"
+                "    --inject-failures \\\n"
+                "    --steps 50 \\\n"
+                "    --loop-id e003loop"
+            ),
+        )
+        raise typer.Exit(exit_codes.USER_ERROR) from exc
+
     try:
         from scenario.jobs.resolve import sanitize_run_id
 
@@ -174,12 +192,14 @@ def loop(
     if not quiet and not json_output:
         first_id = spec.run_id_for(1)
         last_id = spec.run_id_for(max_loops)
+        # markup=False avoids Rich mis-parsing ids that contain brackets/digits.
         console.print(
-            f"[cyan]loop[/cyan] {scenario_name}\n"
+            f"loop {scenario_name}\n"
             f"  loop_id={resolved_loop_id}  (from {loop_id_source})\n"
             f"  run_ids={first_id} .. {last_id}\n"
             f"  max_loops={max_loops}  target_crew={target_crew}  "
-            f"max_actions_per_step={max_actions_per_step}"
+            f"max_actions_per_step={max_actions_per_step}",
+            markup=False,
         )
 
     if dry_run:
@@ -207,19 +227,21 @@ def loop(
     if json_output:
         typer.echo(__import__("json").dumps(result.to_dict(), ensure_ascii=False, indent=2))
     elif quiet:
-        console.print(str(result.manifest_path or ""))
+        console.print(str(result.manifest_path or ""), markup=False)
     else:
         console.print(
-            f"[green]loop done[/green] reason={result.stopped_reason}  "
+            f"loop done reason={result.stopped_reason}  "
             f"runs={len(result.runs)}  target_met={result.target_met}  "
-            f"manifest={result.manifest_path}"
+            f"manifest={result.manifest_path}",
+            markup=False,
         )
         for entry in result.history:
             summary = entry.get("summary") or {}
             console.print(
                 f"  {entry.get('run_id')}: crew_remaining="
                 f"{summary.get('crew_remaining')}  "
-                f"proposals={summary.get('design_proposal_count')}"
+                f"proposals={summary.get('design_proposal_count')}",
+                markup=False,
             )
 
     if any(r.exit_code != 0 for r in result.runs):
@@ -227,11 +249,37 @@ def loop(
     raise typer.Exit(exit_codes.SUCCESS)
 
 
-def _resolve_loop_id(cli_value: Optional[str]) -> tuple[str, str]:
-    """Return (loop_id, source_label). CLI wins, then EA_LOOP_ID, then default."""
+def _extract_loop_id_from_sets(set_values: List[str]) -> Tuple[Optional[str], List[str]]:
+    """Pull loop_id=... / loop.id=... out of --set so it does not enter scenario YAML."""
+    found: Optional[str] = None
+    kept: List[str] = []
+    for item in set_values:
+        if "=" not in item:
+            kept.append(item)
+            continue
+        key, value = item.split("=", 1)
+        key_n = key.strip().lower().replace("-", "_")
+        if key_n in {"loop_id", "loop.id", "output.loop_id"}:
+            found = value.strip()
+            continue
+        kept.append(item)
+    return found, kept
+
+
+def _resolve_loop_id(
+    cli_value: Optional[str],
+    set_value: Optional[str] = None,
+) -> tuple[str, str]:
+    """Return (loop_id, source_label). CLI > --set > EA_LOOP_ID. No silent default."""
     if cli_value is not None and str(cli_value).strip():
         return str(cli_value).strip(), "--loop-id/--run-id"
+    if set_value is not None and str(set_value).strip():
+        return str(set_value).strip(), "--set loop_id="
     env_value = os.environ.get(LOOP_ID_ENV_VAR)
     if env_value is not None and str(env_value).strip():
         return str(env_value).strip(), LOOP_ID_ENV_VAR
-    return DEFAULT_LOOP_ID, f"default ({DEFAULT_LOOP_ID})"
+    raise ValueError(
+        "loop_id is required. Pass --loop-id e003loop "
+        "(or --run-id e003loop / EA_LOOP_ID / --set loop_id=e003loop). "
+        "Without it, results would silently use e002loop."
+    )
