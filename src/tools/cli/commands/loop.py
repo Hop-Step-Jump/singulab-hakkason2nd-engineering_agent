@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import List, Optional
 
@@ -21,6 +22,7 @@ from tools.cli.commands import run as run_cmd
 from tools.cli.output import console, print_error
 
 DEFAULT_SCENARIO = "ssos_eclss_loop"
+LOOP_ID_ENV_VAR = "EA_LOOP_ID"
 
 
 def register(app: typer.Typer) -> None:
@@ -63,13 +65,14 @@ def loop(
         "--target-crew",
         help="Stop when summary.crew_remaining equals this value (default 50).",
     ),
-    loop_id: str = typer.Option(
-        DEFAULT_LOOP_ID,
+    loop_id: Optional[str] = typer.Option(
+        None,
         "--loop-id",
         "--run-id",
         help=(
             "Prefix for result directories and run ids "
-            "(e.g. e003loop → e003loop-run01). Alias: --run-id."
+            "(e.g. e003loop → e003loop-run01 … e003loop-run15). "
+            "Alias: --run-id. Default: e002loop (or EA_LOOP_ID)."
         ),
     ),
     max_actions_per_step: int = typer.Option(
@@ -148,11 +151,20 @@ def loop(
         overrides = dict(overrides or {})
         overrides["agents"] = agents
 
+    resolved_loop_id, loop_id_source = _resolve_loop_id(loop_id)
+    try:
+        from scenario.jobs.resolve import sanitize_run_id
+
+        resolved_loop_id = sanitize_run_id(resolved_loop_id)
+    except ValueError as exc:
+        print_error(str(exc), hint="Example: --loop-id e003loop")
+        raise typer.Exit(exit_codes.USER_ERROR) from exc
+
     spec = LoopSpec(
         scenario=scenario_name,
         overrides=overrides,
         results_root=results_root,
-        loop_id=loop_id,
+        loop_id=resolved_loop_id,
         max_loops=max_loops,
         target_crew=target_crew,
         max_actions_per_step=max_actions_per_step,
@@ -160,11 +172,13 @@ def loop(
     )
 
     if not quiet and not json_output:
+        first_id = spec.run_id_for(1)
+        last_id = spec.run_id_for(max_loops)
         console.print(
-            f"[cyan]loop[/cyan] {scenario_name}  "
-            f"loop_id={loop_id}  "
-            f"max_loops={max_loops}  target_crew={target_crew}  "
-            f"run_ids={spec.run_id_for(1)}…{spec.run_id_for(max_loops)}  "
+            f"[cyan]loop[/cyan] {scenario_name}\n"
+            f"  loop_id={resolved_loop_id}  (from {loop_id_source})\n"
+            f"  run_ids={first_id} .. {last_id}\n"
+            f"  max_loops={max_loops}  target_crew={target_crew}  "
             f"max_actions_per_step={max_actions_per_step}"
         )
 
@@ -173,7 +187,8 @@ def loop(
             "scenario": scenario_name,
             "max_loops": max_loops,
             "target_crew": target_crew,
-            "loop_id": loop_id,
+            "loop_id": resolved_loop_id,
+            "loop_id_source": loop_id_source,
             "run_ids": [spec.run_id_for(i) for i in range(1, max_loops + 1)],
             "overrides": overrides,
         }
@@ -210,3 +225,13 @@ def loop(
     if any(r.exit_code != 0 for r in result.runs):
         raise typer.Exit(exit_codes.RUN_FAILURE)
     raise typer.Exit(exit_codes.SUCCESS)
+
+
+def _resolve_loop_id(cli_value: Optional[str]) -> tuple[str, str]:
+    """Return (loop_id, source_label). CLI wins, then EA_LOOP_ID, then default."""
+    if cli_value is not None and str(cli_value).strip():
+        return str(cli_value).strip(), "--loop-id/--run-id"
+    env_value = os.environ.get(LOOP_ID_ENV_VAR)
+    if env_value is not None and str(env_value).strip():
+        return str(env_value).strip(), LOOP_ID_ENV_VAR
+    return DEFAULT_LOOP_ID, f"default ({DEFAULT_LOOP_ID})"
